@@ -714,15 +714,41 @@ export default function ScanPage() {
         const ctx = c.getContext("2d", { willReadFrequently: true });
         if (!ctx) throw new Error("Canvas non disponibile");
 
-        const bmp = await createImageBitmap(file, { imageOrientation: "from-image" } as any);
+        // ✅ Robust decode (HEIC + iOS safe)
+let bmp: ImageBitmap | null = null;
 
-        const maxSide = 1600;
-        const scale = Math.min(1, maxSide / Math.max(bmp.width, bmp.height));
-        c.width = Math.round(bmp.width * scale);
-        c.height = Math.round(bmp.height * scale);
+try {
+  bmp = await createImageBitmap(file, { imageOrientation: "from-image" } as any);
+} catch {
+  bmp = null;
+}
 
-        ctx.clearRect(0, 0, c.width, c.height);
-        ctx.drawImage(bmp, 0, 0, c.width, c.height);
+if (!bmp) {
+  const url = URL.createObjectURL(file);
+  try {
+    const img = new Image();
+    img.src = url;
+    await img.decode();
+
+    const maxSide = 1600;
+    const scale = Math.min(1, maxSide / Math.max(img.naturalWidth, img.naturalHeight));
+    c.width = Math.round(img.naturalWidth * scale);
+    c.height = Math.round(img.naturalHeight * scale);
+
+    ctx.clearRect(0, 0, c.width, c.height);
+    ctx.drawImage(img, 0, 0, c.width, c.height);
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+} else {
+  const maxSide = 1600;
+  const scale = Math.min(1, maxSide / Math.max(bmp.width, bmp.height));
+  c.width = Math.round(bmp.width * scale);
+  c.height = Math.round(bmp.height * scale);
+
+  ctx.clearRect(0, 0, c.width, c.height);
+  ctx.drawImage(bmp, 0, 0, c.width, c.height);
+}
 
         // 1) detect landmarks on IMAGE (if none -> stop)
         const landmarks = await detectFaceOnImage(c);
