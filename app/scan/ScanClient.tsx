@@ -262,7 +262,8 @@ function isLandmarksPlausible(landmarks: Landmark[], W: number, H: number, mirro
   const noseToMouth = Math.abs(mouthY - p_nose.y);
   const eyeToNose = Math.abs(p_nose.y - eyeY);
 
-  if (eyeSpan < 110) return { ok: false, reason: "too_small" as const };
+  // ✅ più permissivo su upload
+  if (eyeSpan < 70) return { ok: false, reason: "too_small" as const };
 
   const eyeRatio = eyeW / eyeSpan; // ~0.18..0.30
   if (eyeRatio < 0.12 || eyeRatio > 0.38) return { ok: false, reason: "eye_ratio" as const };
@@ -275,6 +276,28 @@ function isLandmarksPlausible(landmarks: Landmark[], W: number, H: number, mirro
   if (dx > 0.9) return { ok: false, reason: "nose_offcenter" as const };
 
   return { ok: true, reason: "ok" as const };
+}
+
+// ✅ Mirror pick for uploads (best-effort)
+function scoreLandmarksPlausibility(landmarks: Landmark[], W: number, H: number, mirrorX?: boolean) {
+  const r = isLandmarksPlausible(landmarks, W, H, mirrorX);
+  if (!r.ok) return 0;
+
+  const leO = landmarks[IDX.leftEyeOuter];
+  const reO = landmarks[IDX.rightEyeOuter];
+  if (!leO || !reO) return 0;
+
+  const p1 = lmPx(leO, W, H, mirrorX);
+  const p2 = lmPx(reO, W, H, mirrorX);
+  const eyeSpan = dist(p1, p2);
+
+  return clamp(eyeSpan / 220, 0, 1);
+}
+
+function pickBestMirrorForImage(landmarks: Landmark[], W: number, H: number) {
+  const s0 = scoreLandmarksPlausibility(landmarks, W, H, false);
+  const s1 = scoreLandmarksPlausibility(landmarks, W, H, true);
+  return s1 > s0 ? true : false;
 }
 
 // WebGPU availability (no extra libs; best effort)
@@ -709,15 +732,18 @@ export default function ScanPage() {
           return;
         }
 
+        // ✅ auto-mirror per upload (alcuni device “ribaltano”)
+        const mirrorX = pickBestMirrorForImage(landmarks, c.width, c.height);
+
         // extra biometric plausibility (anti-logo/objects)
-        const plausL = isLandmarksPlausible(landmarks, c.width, c.height, false);
+        const plausL = isLandmarksPlausible(landmarks, c.width, c.height, mirrorX);
         if (!plausL.ok) {
-          setLastFailReason("Questa immagine non sembra un volto umano valido. Carica una foto frontale del viso.");
+          setLastFailReason("Non riesco a riconoscere un volto valido. Prova: viso frontale, più vicino, luce naturale.");
           setRitual("error");
           return;
         }
 
-        const faceBox = computeFaceBoxFromLandmarks(landmarks, c.width, c.height, false);
+        const faceBox = computeFaceBoxFromLandmarks(landmarks, c.width, c.height, mirrorX);
         const plaus = isFacePlausible(faceBox, c.width, c.height);
         if (!plaus.ok) {
           setLastFailReason("La foto non sembra un volto valido (troppo lontano / tagliato / non frontale).");
@@ -748,7 +774,7 @@ export default function ScanPage() {
           mask = null;
         }
 
-        // 1) multi-sample skin extraction -> stable median in Lab
+        // multi-sample skin extraction -> stable median in Lab
         const hexes: string[] = [];
         for (let i = 0; i < 10; i++) {
           const skin = extractSkinBaseHex({
@@ -756,7 +782,7 @@ export default function ScanPage() {
             canvasW: c.width,
             canvasH: c.height,
             landmarks,
-            mirrorX: false,
+            mirrorX,
             mask: mask ?? null,
           });
           if (skin.ok) hexes.push(skin.hex);
@@ -801,7 +827,7 @@ export default function ScanPage() {
         ref={fileInputRef}
         type="file"
         accept="image/*"
-        capture="user"
+        // ✅ IMPORTANT: rimosso capture="user" per non forzare la fotocamera su mobile
         className="hidden"
         onChange={(e) => {
           const file = e.target.files?.[0];
