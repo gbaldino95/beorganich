@@ -417,16 +417,23 @@ export default function HomePage() {
             <div className="grid gap-3">
               <ScanButton label="Effettua lo scan" />
 
-              <button
-                onClick={onPickPhoto}
-                className="
-                  h-12 w-full rounded-2xl border border-white/20
-                  text-[14px] tracking-wide text-white/85
-                  hover:bg-white/[0.06] transition active:scale-[0.99]
-                "
-              >
-                Carica una foto
-              </button>
+              <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-4">
+  <div className="text-[13px] text-white/80 font-medium">
+    Risultato più preciso in 5 secondi.
+  </div>
+
+  <div className="mt-1 text-[12px] leading-6 text-white/55">
+    Luce naturale, volto frontale, niente filtri.
+    <br />
+    <span className="text-white/70">Nessuna foto viene salvata.</span>
+  </div>
+
+  <div className="mt-3 flex flex-wrap gap-2">
+    <span className="pill subtle">Zero upload automatico</span>
+    <span className="pill subtle">Palette + capi consigliati</span>
+    <span className="pill subtle">Privacy-first</span>
+  </div>
+</div>
 
               {/* Tooltip persuasive + status */}
               <div className="mt-1 grid gap-1 text-center">
