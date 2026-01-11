@@ -26,18 +26,19 @@ export const viewport: Viewport = {
   viewportFit: "cover",
 };
 
+const TIKTOK_PIXEL_ID = "D5HMVMRC77UA3NVKE3G0";
+
 export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="it">
-      <head>
-        {/* ✅ TikTok Pixel */}
-        <Script
-          id="tiktok-pixel"
-          strategy="afterInteractive"
-        >
-          {`
+      {/* ✅ TikTok Pixel */}
+      <Script
+        id="tiktok-pixel"
+        strategy="afterInteractive"
+        dangerouslySetInnerHTML={{
+          __html: `
             !function (w, d, t) {
               w.TiktokAnalyticsObject = t;
               var ttq = w[t] = w[t] || [];
@@ -74,12 +75,12 @@ export default function RootLayout({
                 a.parentNode.insertBefore(o, a);
               };
 
-              ttq.load('D5HMVMRC77UA3NVKE3GO');
+              ttq.load("D5HMVMRC77UA3NVKE3G0");
               ttq.page();
             }(window, document, 'ttq');
-          `}
-        </Script>
-      </head>
+          `,
+        }}
+      />
 
       <body>{children}</body>
     </html>

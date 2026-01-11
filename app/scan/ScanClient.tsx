@@ -1,5 +1,20 @@
 // app/scan/ScanClient.tsx
 "use client";
+
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
+
+import { type PaletteItem, makePaletteFromSamples } from "@/app/lib/paletteLogic";
+import {
+  detectFaceOnVideo,
+  detectFaceOnImage,
+  segmentPersonOnImage,
+  extractSkinBaseHex,
+  type Landmark,
+  type FaceBox as MPFaceBox,
+} from "@/app/lib/faceEngine";
+
 declare global {
   interface Window {
     ttq?: any;
@@ -11,21 +26,6 @@ function track(event: string, data: Record<string, any> = {}) {
     window.ttq.track(event, data);
   }
 }
-import React, { useCallback, useEffect, useRef, useState } from "react";
-import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
-
-import { type PaletteItem, makePaletteFromSamples } from "@/app/lib/paletteLogic";
-
-// ✅ MediaPipe on-device engine
-import {
-  detectFaceOnVideo,
-  detectFaceOnImage,
-  segmentPersonOnImage,
-  extractSkinBaseHex,
-  type Landmark,
-  type FaceBox as MPFaceBox,
-} from "@/app/lib/faceEngine";
 
 type RitualState = "idle" | "calibrating" | "error" | "loading";
 
@@ -516,6 +516,10 @@ export default function ScanPage() {
     (async () => {
       webgpuRef.current = await hasWebGPU();
     })();
+    useEffect(() => {
+  // evento standard TikTok: view pagina/step scan
+  track("ViewContent", { content_name: "scan" });
+}, []);
   }, []);
 
   const stopCamera = useCallback(() => {
@@ -718,6 +722,7 @@ export default function ScanPage() {
         track("UploadPhoto", {
   source: "gallery",
 });
+track("ClickButton", { content_name: "upload_photo" });
       setLastFailReason(null);
       setUploading(true);
       setRitual("loading");
@@ -841,12 +846,16 @@ if (!bmp) {
         const pal = makePaletteFromSamples(stableHex);
         saveLastPalette(pal);
 
-        setRitual("idle");
-        track("ScanCompleted", {
-  quality: percent,
-});
-track("ScanCompleted", { quality: Math.round(quality * 100) });
-        router.push("/result");
+     setRitual("idle");
+
+const qualityPct = Math.round(combined * 100);
+
+// eventi standard + custom
+track("Lead", { value: 1, currency: "EUR" });
+track("CompleteRegistration", { content_name: "scan_completed", value: qualityPct });
+track("ScanCompleted", { quality: qualityPct });
+
+router.push("/result");
       } catch {
         setLastFailReason("Errore nel caricamento foto. Riprova.");
         setRitual("error");
@@ -895,7 +904,10 @@ track("ScanCompleted", { quality: Math.round(quality * 100) });
   href={SHOP_URL}
   target="_blank"
   rel="noreferrer"
-  onClick={() => track("ShopClick")}
+  onClick={() => {
+  track("ClickButton", { content_name: "shop" });
+  track("ShopClick");
+}}
 >
   Shop
 </a>
