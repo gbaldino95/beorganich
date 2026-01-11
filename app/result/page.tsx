@@ -2,6 +2,7 @@
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 
 import ProductCarousel from "@/app/components/ProductsCarousel";
 import SharePalette from "@/app/components/SharePalette";
@@ -21,18 +22,15 @@ const SHOP_URL = "https://shop.beorganich-example.com";
 const SHARE_BASE_URL = "https://beorganich-example.vercel.app";
 const LAST_KEY = "beorganich:lastPalette:v1";
 
-// fallback RAM (in caso localStorage non leggibile)
-let MEMORY_LAST: PaletteItem[] | null = null;
-
 function loadLastPalette(): PaletteItem[] | null {
-  if (MEMORY_LAST?.length) return MEMORY_LAST;
   try {
     const raw = localStorage.getItem(LAST_KEY);
     if (!raw) return null;
+
     const parsed = JSON.parse(raw);
     if (!parsed?.palette?.length) return null;
-    MEMORY_LAST = parsed.palette as PaletteItem[];
-    return MEMORY_LAST;
+
+    return parsed.palette as PaletteItem[];
   } catch {
     return null;
   }
@@ -46,10 +44,14 @@ function cx(...parts: Array<string | false | undefined | null>) {
 export default function ResultPage() {
   const [palette, setPalette] = useState<PaletteItem[] | null>(null);
 
+  // ✅ quando ScanClient fa /result?ts=..., qui cambia e ricarichiamo
+  const searchParams = useSearchParams();
+  const ts = searchParams.get("ts");
+
   useEffect(() => {
     const last = loadLastPalette();
     setPalette(last);
-  }, []);
+  }, [ts]);
 
   const shareUrl = useMemo(
     () => buildShareUrl(SHARE_BASE_URL, palette ?? [], BRAND),
@@ -76,9 +78,7 @@ export default function ResultPage() {
     return (
       <div className="min-h-dvh bg-black text-white">
         <header className="mx-auto flex max-w-5xl items-center justify-between px-5 pt-6">
-          <div className="text-[12px] tracking-[0.22em] text-white/70">
-            {BRAND}
-          </div>
+          <div className="text-[12px] tracking-[0.22em] text-white/70">{BRAND}</div>
           <Link className="pillButton subtle" href="/">
             Home
           </Link>
@@ -120,9 +120,7 @@ export default function ResultPage() {
       {/* HEADER */}
       <header className="mx-auto flex max-w-5xl items-center justify-between px-5 pt-6 relative z-10">
         <div className="flex items-center gap-3">
-          <div className="text-[12px] tracking-[0.22em] text-white/70">
-            {BRAND}
-          </div>
+          <div className="text-[12px] tracking-[0.22em] text-white/70">{BRAND}</div>
           <div className="pill">Risultato</div>
           <div className="pill subtle">✓ salvato</div>
         </div>
@@ -152,9 +150,7 @@ export default function ResultPage() {
               <span className="pill subtle">stile dominante</span>
             </div>
 
-            <h1 className="resultHeroTitle2 mt-4">
-              {insight.title}
-            </h1>
+            <h1 className="resultHeroTitle2 mt-4">{insight.title}</h1>
 
             <p className="resultHeroSub2">
               {insight.subtitle}{" "}
@@ -191,7 +187,7 @@ export default function ResultPage() {
 
             <div className="resultSwatches2">
               {palette.map((p) => (
-                <div key={p.hex} className="resultSwatch2">
+                <div key={`${p.hex}-${p.id ?? ""}`} className="resultSwatch2">
                   <div className="resultSwatchColor2" style={{ background: p.hex }} />
                   <div className="resultSwatchMeta2">
                     <div className="resultSwatchName2">{p.name}</div>

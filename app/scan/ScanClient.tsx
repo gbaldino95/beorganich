@@ -1,16 +1,6 @@
 // app/scan/ScanClient.tsx
 "use client";
-declare global {
-  interface Window {
-    ttq?: any;
-  }
-}
 
-function track(event: string, data: Record<string, any> = {}) {
-  if (typeof window !== "undefined" && window.ttq) {
-    window.ttq.track(event, data);
-  }
-}
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -23,9 +13,22 @@ import {
   detectFaceOnImage,
   segmentPersonOnImage,
   extractSkinBaseHex,
+  extractSkinHexForRegions,
   type Landmark,
   type FaceBox as MPFaceBox,
 } from "@/app/lib/faceEngine";
+
+declare global {
+  interface Window {
+    ttq?: any;
+  }
+}
+
+function track(event: string, data: Record<string, any> = {}) {
+  if (typeof window !== "undefined" && window.ttq) {
+    window.ttq.track(event, data);
+  }
+}
 
 type RitualState = "idle" | "calibrating" | "error" | "loading";
 
@@ -37,7 +40,17 @@ const LAST_KEY = "beorganich:lastPalette:v1";
 let MEMORY_LAST: PaletteItem[] | null = null;
 
 /* ---------------- Persist ---------------- */
-function saveLastPalette(pal: PaletteItem[]) {
+type ScanMeta = {
+  method: "camera" | "upload";
+  confidence: number; // 0..100
+  undertone: "warm" | "cool" | "neutral";
+  depth: "light" | "medium" | "deep";
+  lab: { L: number; a: number; b: number };
+  sampleCount: number;
+  quality: number; // 0..100
+};
+
+function saveLastPalette(pal: PaletteItem[], meta: ScanMeta) {
   MEMORY_LAST = pal;
   try {
     localStorage.setItem(
@@ -45,6 +58,7 @@ function saveLastPalette(pal: PaletteItem[]) {
       JSON.stringify({
         ts: Date.now(),
         palette: pal,
+        meta,
       })
     );
   } catch {}
@@ -54,8 +68,159 @@ function saveLastPalette(pal: PaletteItem[]) {
 function clamp(n: number, a: number, b: number) {
   return Math.max(a, Math.min(b, n));
 }
+function clamp01(x: number) {
+  return Math.max(0, Math.min(1, x));
+}
 function lerp(a: number, b: number, t: number) {
   return a + (b - a) * t;
+}
+
+/* ---------------- Robust local color math (NO imports) ---------------- */
+function normalizeHexLocal(hex: string) {
+  const h = (hex || "").trim();
+  if (!h) return "#777777";
+  if (h.startsWith("#")) return h.length === 7 ? h.toUpperCase() : "#777777";
+  return h.length === 6 ? `#${h.toUpperCase()}` : "#777777";
+}
+function hexToRgbLocal(hex: string) {
+  const h = normalizeHexLocal(hex).replace("#", "");
+  return {
+    r: parseInt(h.slice(0, 2), 16) || 0,
+    g: parseInt(h.slice(2, 4), 16) || 0,
+    b: parseInt(h.slice(4, 6), 16) || 0,
+  };
+}
+function srgbToLin(v: number) {
+  const x = v / 255;
+  return x <= 0.04045 ? x / 12.92 : Math.pow((x + 0.055) / 1.055, 2.4);
+}
+function rgbToXyz(r: number, g: number, b: number) {
+  const R = srgbToLin(r);
+  const G = srgbToLin(g);
+  const B = srgbToLin(b);
+  return {
+    X: R * 0.4124 + G * 0.3576 + B * 0.1805,
+    Y: R * 0.2126 + G * 0.7152 + B * 0.0722,
+    Z: R * 0.0193 + G * 0.1192 + B * 0.9505,
+  };
+}
+function fLab(t: number) {
+  return t > 0.008856 ? Math.cbrt(t) : 7.787 * t + 16 / 116;
+}
+function xyzToLab(X: number, Y: number, Z: number) {
+  const Xn = 0.95047,
+    Yn = 1.0,
+    Zn = 1.08883;
+  const fx = fLab(X / Xn);
+  const fy = fLab(Y / Yn);
+  const fz = fLab(Z / Zn);
+  return { L: 116 * fy - 16, a: 500 * (fx - fy), b: 200 * (fy - fz) };
+}
+function hexToLabLocal(hex: string) {
+  const { r, g, b } = hexToRgbLocal(hex);
+  const { X, Y, Z } = rgbToXyz(r, g, b);
+  return xyzToLab(X, Y, Z);
+}
+function deltaELocal(
+  l1: { L: number; a: number; b: number },
+  l2: { L: number; a: number; b: number }
+) {
+  return Math.hypot(l1.L - l2.L, l1.a - l2.a, l1.b - l2.b);
+}
+
+/* ---------------- Confidence helpers ---------------- */
+function getSkinSignalsFromHex(hex: string) {
+  const lab = hexToLabLocal(hex);
+  const L = lab.L;
+  const a = lab.a;
+  const b = lab.b;
+
+  const undertone: "warm" | "cool" | "neutral" = b >= 9 ? "warm" : b <= -6 ? "cool" : "neutral";
+  const depth: "light" | "medium" | "deep" = L >= 72 ? "light" : L <= 46 ? "deep" : "medium";
+
+  return {
+    undertone,
+    depth,
+    lab: { L: Math.round(L), a: Math.round(a), b: Math.round(b) },
+  };
+}
+
+function computeConfidenceFromHexes(params: { stableHex: string; hexes: string[]; quality01: number }) {
+  const { stableHex, hexes, quality01 } = params;
+
+  const base = hexToLabLocal(stableHex);
+  const ds = hexes
+    .map((h) => {
+      try {
+        return deltaELocal(base, hexToLabLocal(h));
+      } catch {
+        return 999;
+      }
+    })
+    .filter((d) => Number.isFinite(d) && d < 999);
+
+  const avgDE = ds.length ? ds.reduce((x, y) => x + y, 0) / ds.length : 99;
+  const stability01 = clamp01(1 - avgDE / 18);
+  const count01 = clamp01(hexes.length / 24);
+
+  const conf01 = clamp01(0.45 * quality01 + 0.35 * stability01 + 0.2 * count01);
+  return { confidence: Math.round(conf01 * 100), avgDE: Math.round(avgDE * 10) / 10 };
+}
+
+/* ---------------- Image compress (upload stability) ---------------- */
+async function compressImageToWebP(file: File, opts: { maxSide?: number; quality?: number } = {}): Promise<Blob> {
+  const maxSide = opts.maxSide ?? 1600;
+  const quality = opts.quality ?? 0.82;
+
+  let bmp: ImageBitmap | null = null;
+  try {
+    bmp = await createImageBitmap(file, { imageOrientation: "from-image" } as any);
+  } catch {
+    bmp = null;
+  }
+
+  let w = 0;
+  let h = 0;
+  let drawSource: CanvasImageSource;
+
+  if (bmp) {
+    w = bmp.width;
+    h = bmp.height;
+    drawSource = bmp;
+  } else {
+    const url = URL.createObjectURL(file);
+    try {
+      const img = new Image();
+      img.src = url;
+      await img.decode();
+      w = img.naturalWidth;
+      h = img.naturalHeight;
+      drawSource = img;
+    } finally {
+      URL.revokeObjectURL(url);
+    }
+  }
+
+  const scale = Math.min(1, maxSide / Math.max(w, h));
+  const tw = Math.max(1, Math.round(w * scale));
+  const th = Math.max(1, Math.round(h * scale));
+
+  const off = document.createElement("canvas");
+  off.width = tw;
+  off.height = th;
+
+  const ctx = off.getContext("2d", { willReadFrequently: true });
+  if (!ctx) throw new Error("Canvas non disponibile");
+
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.clearRect(0, 0, tw, th);
+  ctx.drawImage(drawSource, 0, 0, tw, th);
+
+  const blob: Blob = await new Promise((resolve, reject) => {
+    off.toBlob((b) => (b ? resolve(b) : reject(new Error("toBlob failed"))), "image/webp", quality);
+  });
+
+  return blob;
 }
 
 function drawMirrorToCanvas(video: HTMLVideoElement, canvas: HTMLCanvasElement) {
@@ -161,7 +326,7 @@ function guidanceFromFace(face: MPFaceBox, W: number, H: number) {
   return msgs[0] ?? "Centro perfetto. Resta fermo.";
 }
 
-/* --------- Landmark -> FaceBox + plausibility (anti-logo) --------- */
+/* --------- Landmark -> FaceBox + plausibility --------- */
 function computeFaceBoxFromLandmarks(landmarks: Landmark[], canvasW: number, canvasH: number, mirrorX?: boolean) {
   let minX = 1,
     minY = 1,
@@ -196,31 +361,23 @@ function isFacePlausible(face: MPFaceBox, canvasW: number, canvasH: number) {
   const canvasArea = canvasW * canvasH;
   const areaRatio = canvasArea ? area / canvasArea : 0;
 
-  // min/max per evitare “logo gigante” o “micro box”
-  const okArea = areaRatio > 0.06 && areaRatio < 0.70;
+  const okArea = areaRatio > 0.06 && areaRatio < 0.7;
 
-  // centro
   const cx = face.x + face.w / 2;
   const cy = face.y + face.h / 2;
   const dx = Math.abs(cx - canvasW / 2) / (canvasW / 2);
   const dy = Math.abs(cy - canvasH / 2) / (canvasH / 2);
   const okCenter = dx < 0.62 && dy < 0.62;
 
-  // aspect ratio plausibile
   const aspect = face.w > 0 ? face.h / face.w : 0;
   const okAspect = aspect >= 0.55 && aspect <= 1.85;
 
-  // min px (anti “false box”)
   const okPx = face.w >= 120 && face.h >= 120;
 
-  return { ok: okArea && okCenter && okAspect && okPx, areaRatio, dx, dy, aspect };
+  return { ok: okArea && okCenter && okAspect && okPx };
 }
 
-/* ------------------------------------------------------------------ */
-/* ---------------- PERFECT PERFECT (WebGPU + Stability) -------------- */
-/* ------------------------------------------------------------------ */
-
-// Key indices (biometric plausibility)
+/* ---------------- landmark plausibility ---------------- */
 const IDX = {
   leftEyeOuter: 33,
   leftEyeInner: 133,
@@ -240,7 +397,6 @@ function lmPx(lm: Landmark, W: number, H: number, mirrorX?: boolean) {
   return { x: nx * W, y: lm.y * H };
 }
 
-// Stronger anti-fake: facial proportions
 function isLandmarksPlausible(landmarks: Landmark[], W: number, H: number, mirrorX?: boolean) {
   const leO = landmarks[IDX.leftEyeOuter];
   const leI = landmarks[IDX.leftEyeInner];
@@ -250,9 +406,7 @@ function isLandmarksPlausible(landmarks: Landmark[], W: number, H: number, mirro
   const mu = landmarks[IDX.mouthUpper];
   const ml = landmarks[IDX.mouthLower];
 
-  if (!leO || !leI || !reI || !reO || !nose || !mu || !ml) {
-    return { ok: false, reason: "missing_keypoints" as const };
-  }
+  if (!leO || !leI || !reI || !reO || !nose || !mu || !ml) return { ok: false as const };
 
   const p_leO = lmPx(leO, W, H, mirrorX);
   const p_leI = lmPx(leI, W, H, mirrorX);
@@ -272,23 +426,20 @@ function isLandmarksPlausible(landmarks: Landmark[], W: number, H: number, mirro
   const noseToMouth = Math.abs(mouthY - p_nose.y);
   const eyeToNose = Math.abs(p_nose.y - eyeY);
 
-  // ✅ più permissivo su upload
-  if (eyeSpan < 70) return { ok: false, reason: "too_small" as const };
-
-  const eyeRatio = eyeW / eyeSpan; // ~0.18..0.30
-  if (eyeRatio < 0.12 || eyeRatio > 0.38) return { ok: false, reason: "eye_ratio" as const };
+  if (eyeSpan < 70) return { ok: false as const };
+  const eyeRatio = eyeW / eyeSpan;
+  if (eyeRatio < 0.12 || eyeRatio > 0.38) return { ok: false as const };
 
   const vertRatio = eyeToNose > 1 ? noseToMouth / eyeToNose : 0;
-  if (vertRatio < 0.35 || vertRatio > 2.2) return { ok: false, reason: "vert_ratio" as const };
+  if (vertRatio < 0.35 || vertRatio > 2.2) return { ok: false as const };
 
   const eyeMidX = (p_leO.x + p_reO.x) / 2;
   const dx = Math.abs(p_nose.x - eyeMidX) / (eyeSpan / 2);
-  if (dx > 0.9) return { ok: false, reason: "nose_offcenter" as const };
+  if (dx > 0.9) return { ok: false as const };
 
-  return { ok: true, reason: "ok" as const };
+  return { ok: true as const };
 }
 
-// ✅ Mirror pick for uploads (best-effort)
 function scoreLandmarksPlausibility(landmarks: Landmark[], W: number, H: number, mirrorX?: boolean) {
   const r = isLandmarksPlausible(landmarks, W, H, mirrorX);
   if (!r.ok) return 0;
@@ -307,10 +458,10 @@ function scoreLandmarksPlausibility(landmarks: Landmark[], W: number, H: number,
 function pickBestMirrorForImage(landmarks: Landmark[], W: number, H: number) {
   const s0 = scoreLandmarksPlausibility(landmarks, W, H, false);
   const s1 = scoreLandmarksPlausibility(landmarks, W, H, true);
-  return s1 > s0 ? true : false;
+  return s1 > s0;
 }
 
-// WebGPU availability (no extra libs; best effort)
+/* ---------------- WebGPU availability ---------------- */
 async function hasWebGPU() {
   try {
     return typeof navigator !== "undefined" && !!(navigator as any).gpu;
@@ -319,7 +470,7 @@ async function hasWebGPU() {
   }
 }
 
-// Sharpness (variance of Laplacian) on a small crop
+/* ---------------- Sharpness + Motion ---------------- */
 function computeSharpness(ctx: CanvasRenderingContext2D, face: MPFaceBox) {
   const pad = 0.18;
   const x0 = clamp(Math.floor(face.x + face.w * pad), 0, ctx.canvas.width - 1);
@@ -356,13 +507,7 @@ function computeSharpness(ctx: CanvasRenderingContext2D, face: MPFaceBox) {
   for (let y = 1; y < H - 1; y++) {
     for (let x = 1; x < W - 1; x++) {
       const c = g[y * W + x];
-      const lap =
-        -4 * c +
-        g[y * W + (x - 1)] +
-        g[y * W + (x + 1)] +
-        g[(y - 1) * W + x] +
-        g[(y + 1) * W + x];
-
+      const lap = -4 * c + g[y * W + (x - 1)] + g[y * W + (x + 1)] + g[(y - 1) * W + x] + g[(y + 1) * W + x];
       sum += lap;
       sum2 += lap * lap;
       n++;
@@ -375,12 +520,7 @@ function computeSharpness(ctx: CanvasRenderingContext2D, face: MPFaceBox) {
   return Math.max(0, varr);
 }
 
-// Motion score from frame-to-frame crop diff
-function computeMotionScore(
-  ctx: CanvasRenderingContext2D,
-  face: MPFaceBox,
-  prevRef: React.MutableRefObject<Float32Array | null>
-) {
+function computeMotionScore(ctx: CanvasRenderingContext2D, face: MPFaceBox, prevRef: React.MutableRefObject<Float32Array | null>) {
   const pad = 0.26;
   const x0 = clamp(Math.floor(face.x + face.w * pad), 0, ctx.canvas.width - 1);
   const y0 = clamp(Math.floor(face.y + face.h * pad), 0, ctx.canvas.height - 1);
@@ -418,60 +558,27 @@ function computeMotionScore(
   for (let i = 0; i < cur.length; i++) diff += Math.abs(cur[i] - prev[i]);
   diff /= cur.length;
 
-  // lower diff => higher score
   return clamp(1 - diff / 10, 0, 1);
 }
 
-/* 1) Stable hex selection using median in Lab */
-function hexToRgb(hex: string) {
-  const h = hex.replace("#", "").trim();
-  if (h.length !== 6) return { r: 0, g: 0, b: 0 };
-  return { r: parseInt(h.slice(0, 2), 16), g: parseInt(h.slice(2, 4), 16), b: parseInt(h.slice(4, 6), 16) };
-}
-function srgbToLin(v: number) {
-  const x = v / 255;
-  return x <= 0.04045 ? x / 12.92 : Math.pow((x + 0.055) / 1.055, 2.4);
-}
-function rgbToXyz(r: number, g: number, b: number) {
-  const R = srgbToLin(r);
-  const G = srgbToLin(g);
-  const B = srgbToLin(b);
-  const X = R * 0.4124 + G * 0.3576 + B * 0.1805;
-  const Y = R * 0.2126 + G * 0.7152 + B * 0.0722;
-  const Z = R * 0.0193 + G * 0.1192 + B * 0.9505;
-  return { X, Y, Z };
-}
-function fLab(t: number) {
-  return t > 0.008856 ? Math.cbrt(t) : 7.787 * t + 16 / 116;
-}
-function xyzToLab(X: number, Y: number, Z: number) {
-  const Xn = 0.95047,
-    Yn = 1.0,
-    Zn = 1.08883;
-  const fx = fLab(X / Xn);
-  const fy = fLab(Y / Yn);
-  const fz = fLab(Z / Zn);
-  return { L: 116 * fy - 16, a: 500 * (fx - fy), b: 200 * (fy - fz) };
-}
-function hexToLab(hex: string) {
-  const { r, g, b } = hexToRgb(hex);
-  const { X, Y, Z } = rgbToXyz(r, g, b);
-  return xyzToLab(X, Y, Z);
-}
+/* ---------------- Stable hex (median in Lab) ---------------- */
 function medianNum(arr: number[]) {
   if (!arr.length) return 0;
   const a = [...arr].sort((x, y) => x - y);
   const mid = Math.floor(a.length / 2);
   return a.length % 2 ? a[mid] : (a[mid - 1] + a[mid]) / 2;
 }
+
 function pickStableHex(hexes: string[]) {
   if (!hexes.length) return "#777777";
-  const labs = hexes.map((h) => ({ h, lab: hexToLab(h) }));
+  const labs = hexes.map((h) => ({ h: normalizeHexLocal(h), lab: hexToLabLocal(h) }));
   const Lm = medianNum(labs.map((x) => x.lab.L));
   const am = medianNum(labs.map((x) => x.lab.a));
   const bm = medianNum(labs.map((x) => x.lab.b));
+
   let best = labs[0].h;
   let bestD = Infinity;
+
   for (const x of labs) {
     const d = Math.hypot(x.lab.L - Lm, x.lab.a - am, x.lab.b - bm);
     if (d < bestD) {
@@ -482,6 +589,7 @@ function pickStableHex(hexes: string[]) {
   return best;
 }
 
+/* ---------------- Component ---------------- */
 export default function ScanPage() {
   const router = useRouter();
   const params = useSearchParams();
@@ -500,13 +608,9 @@ export default function ScanPage() {
 
   const goodFramesRef = useRef(0);
   const smoothedQualityRef = useRef(0);
-
-  // PERFECT stability buffers
   const stableHexesRef = useRef<string[]>([]);
   const lastStableSampleAtRef = useRef(0);
   const prevMotionRef = useRef<Float32Array | null>(null);
-
-  // (optional) show WebGPU status inside hint/meta (kept minimal)
   const webgpuRef = useRef<boolean>(false);
 
   // ✅ soglia 65%
@@ -548,7 +652,6 @@ export default function ScanPage() {
     await v.play();
   }, [stopCamera]);
 
-  // NOTE: With "perfect-perfect" we finalize directly from stability buffers
   const runTick = useCallback(async () => {
     const v = videoRef.current;
     const c = canvasRef.current;
@@ -571,7 +674,7 @@ export default function ScanPage() {
       return;
     }
 
-    // ✅ FaceLandmarker on-device (throttle)
+    // throttle detect
     const tickCounter = (runTick as any)._c ?? 0;
     (runTick as any)._c = tickCounter + 1;
     const doDetect = tickCounter % 3 === 0;
@@ -580,7 +683,6 @@ export default function ScanPage() {
 
     if (doDetect) {
       try {
-        // IMPORTANT: timestampMs MUST be monotonic-ish for VIDEO mode
         landmarks = await detectFaceOnVideo(v, Date.now());
       } catch {
         landmarks = null;
@@ -599,11 +701,8 @@ export default function ScanPage() {
       return;
     }
 
-    // FaceBox + basic plausibility
     const faceBox = computeFaceBoxFromLandmarks(landmarks, c.width, c.height, true);
     const plaus = isFacePlausible(faceBox, c.width, c.height);
-
-    // Stronger plausibility (biometric)
     const plaus2 = isLandmarksPlausible(landmarks, c.width, c.height, true);
 
     if (!plaus.ok || !plaus2.ok) {
@@ -615,12 +714,9 @@ export default function ScanPage() {
       return;
     }
 
-    // PERFECT quality combo: base + sharpness + low motion
     const qBase = computeQuality(ctx, faceBox);
-
     const sharp = computeSharpness(ctx, faceBox);
     const sharpScore = clamp(sharp / 220, 0, 1);
-
     const motionScore = computeMotionScore(ctx, faceBox, prevMotionRef);
 
     const combined = clamp(0.42 * qBase.score + 0.33 * sharpScore + 0.25 * motionScore, 0, 1);
@@ -634,7 +730,6 @@ export default function ScanPage() {
     const hint = smooth >= 0.55 ? qBase.hint : guide;
     setQualityHint(hint);
 
-    // stability buffer: collect multiple skin samples only when quality is high
     if (smooth >= THRESHOLD) {
       goodFramesRef.current += 1;
 
@@ -648,7 +743,7 @@ export default function ScanPage() {
           canvasH: c.height,
           landmarks,
           mirrorX: true,
-          mask: null, // video: keep fast
+          mask: null,
         });
 
         if (skin.ok) {
@@ -661,17 +756,46 @@ export default function ScanPage() {
       stableHexesRef.current = [];
     }
 
-    // finalize only if stable enough
+    // ✅ FINALIZE LIVE
     if (goodFramesRef.current >= 10 && stableHexesRef.current.length >= 10) {
       goodFramesRef.current = 0;
 
       const stableHex = pickStableHex(stableHexesRef.current);
-
       const pal = makePaletteFromSamples(stableHex);
-      saveLastPalette(pal);
+
+      const signals = getSkinSignalsFromHex(stableHex);
+      const conf = computeConfidenceFromHexes({
+        stableHex,
+        hexes: stableHexesRef.current,
+        quality01: smooth,
+      });
+
+      const meta: ScanMeta = {
+        method: "camera",
+        confidence: conf.confidence,
+        undertone: signals.undertone,
+        depth: signals.depth,
+        lab: signals.lab,
+        sampleCount: stableHexesRef.current.length,
+        quality: Math.round(smooth * 100),
+      };
+
+      saveLastPalette(pal, meta);
+
+      track("ScanCompleted", {
+        method: meta.method,
+        confidence: meta.confidence,
+        quality: meta.quality,
+        undertone: meta.undertone,
+        depth: meta.depth,
+        L: meta.lab.L,
+        a: meta.lab.a,
+        b: meta.lab.b,
+        samples: meta.sampleCount,
+      });
 
       stopCamera();
-      router.push("/result");
+      router.push(`/result?ts=${Date.now()}`);
       return;
     }
 
@@ -679,9 +803,8 @@ export default function ScanPage() {
   }, [router, stopCamera]);
 
   const startRitual = useCallback(async () => {
-    track("StartScan", {
-  method: "camera",
-});
+    track("StartScan", { method: "camera" });
+
     setLastFailReason(null);
     setRitual("loading");
     setQuality(0);
@@ -689,7 +812,6 @@ export default function ScanPage() {
     smoothedQualityRef.current = 0;
     goodFramesRef.current = 0;
 
-    // reset perfect buffers
     stableHexesRef.current = [];
     lastStableSampleAtRef.current = 0;
     prevMotionRef.current = null;
@@ -710,18 +832,45 @@ export default function ScanPage() {
   }, [runTick, startCamera]);
 
   const onPickPhoto = useCallback(() => {
+    if (uploading) return;
     fileInputRef.current?.click();
-  }, []);
+  }, [uploading]);
 
   const onUploadFile = useCallback(
     async (file: File) => {
-        track("UploadPhoto", {
-  source: "gallery",
-});
+      if (uploading) return;
+
+      const allowed = ["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"];
+      if (!allowed.includes(file.type)) {
+        setLastFailReason("Formato non supportato. Usa JPG/PNG/WEBP.");
+        setRitual("error");
+        return;
+      }
+      if (file.size > 6 * 1024 * 1024) {
+        setLastFailReason("Immagine troppo grande. Max 6MB.");
+        setRitual("error");
+        return;
+      }
+
+      // compress for stability
+      let workingFile = file;
+      try {
+        const compressedBlob = await compressImageToWebP(file, { maxSide: 1600, quality: 0.82 });
+        if (compressedBlob.size > 0 && compressedBlob.size < file.size) {
+          workingFile = new File([compressedBlob], "beorganich.webp", { type: "image/webp" });
+        }
+      } catch {
+        workingFile = file;
+      }
+
+      track("UploadPhoto", { source: "gallery" });
+
       setLastFailReason(null);
       setUploading(true);
       setRitual("loading");
       stopCamera();
+
+      if (fileInputRef.current) fileInputRef.current.disabled = true;
 
       try {
         const c = canvasRef.current;
@@ -730,43 +879,46 @@ export default function ScanPage() {
         const ctx = c.getContext("2d", { willReadFrequently: true });
         if (!ctx) throw new Error("Canvas non disponibile");
 
-        // ✅ Robust decode (HEIC + iOS safe)
-let bmp: ImageBitmap | null = null;
+        // decode robust
+        let bmp: ImageBitmap | null = null;
+        try {
+          bmp = await createImageBitmap(workingFile, { imageOrientation: "from-image" } as any);
+        } catch {
+          bmp = null;
+        }
 
-try {
-  bmp = await createImageBitmap(file, { imageOrientation: "from-image" } as any);
-} catch {
-  bmp = null;
-}
+        if (!bmp) {
+          const url = URL.createObjectURL(workingFile);
+          try {
+            const img = new Image();
+            img.src = url;
+            await img.decode();
 
-if (!bmp) {
-  const url = URL.createObjectURL(file);
-  try {
-    const img = new Image();
-    img.src = url;
-    await img.decode();
+            const maxSide = 1600;
+            const scale = Math.min(1, maxSide / Math.max(img.naturalWidth, img.naturalHeight));
+            c.width = Math.round(img.naturalWidth * scale);
+            c.height = Math.round(img.naturalHeight * scale);
 
-    const maxSide = 1600;
-    const scale = Math.min(1, maxSide / Math.max(img.naturalWidth, img.naturalHeight));
-    c.width = Math.round(img.naturalWidth * scale);
-    c.height = Math.round(img.naturalHeight * scale);
+            ctx.setTransform(1, 0, 0, 1, 0, 0);
+            ctx.clearRect(0, 0, c.width, c.height);
+            ctx.drawImage(img, 0, 0, c.width, c.height);
+          } finally {
+            URL.revokeObjectURL(url);
+          }
+        } else {
+          const maxSide = 1600;
+          const scale = Math.min(1, maxSide / Math.max(bmp.width, bmp.height));
+          c.width = Math.round(bmp.width * scale);
+          c.height = Math.round(bmp.height * scale);
 
-    ctx.clearRect(0, 0, c.width, c.height);
-    ctx.drawImage(img, 0, 0, c.width, c.height);
-  } finally {
-    URL.revokeObjectURL(url);
-  }
-} else {
-  const maxSide = 1600;
-  const scale = Math.min(1, maxSide / Math.max(bmp.width, bmp.height));
-  c.width = Math.round(bmp.width * scale);
-  c.height = Math.round(bmp.height * scale);
+          ctx.setTransform(1, 0, 0, 1, 0, 0);
+          ctx.clearRect(0, 0, c.width, c.height);
+          ctx.drawImage(bmp, 0, 0, c.width, c.height);
+        }
 
-  ctx.clearRect(0, 0, c.width, c.height);
-  ctx.drawImage(bmp, 0, 0, c.width, c.height);
-}
+        if (c.width < 64 || c.height < 64) throw new Error("Canvas troppo piccolo");
 
-        // 1) detect landmarks on IMAGE (if none -> stop)
+        // 1) landmarks
         const landmarks = await detectFaceOnImage(c);
         if (!landmarks?.length) {
           setLastFailReason("Non vedo un volto nella foto. Usa una foto frontale (niente filtri, luce naturale).");
@@ -774,10 +926,8 @@ if (!bmp) {
           return;
         }
 
-        // ✅ auto-mirror per upload (alcuni device “ribaltano”)
         const mirrorX = pickBestMirrorForImage(landmarks, c.width, c.height);
 
-        // extra biometric plausibility (anti-logo/objects)
         const plausL = isLandmarksPlausible(landmarks, c.width, c.height, mirrorX);
         if (!plausL.ok) {
           setLastFailReason("Non riesco a riconoscere un volto valido. Prova: viso frontale, più vicino, luce naturale.");
@@ -793,7 +943,7 @@ if (!bmp) {
           return;
         }
 
-        // 2) quality gate = base + sharpness (no motion for still)
+        // 2) quality gate
         const qBase = computeQuality(ctx, faceBox);
         const sharp = computeSharpness(ctx, faceBox);
         const sharpScore = clamp(sharp / 220, 0, 1);
@@ -802,13 +952,13 @@ if (!bmp) {
         setQuality(combined);
         setQualityHint(qBase.hint);
 
-        if (combined < 0.50) {
+        if (combined < 0.5) {
           setLastFailReason("Foto troppo scura o poco nitida. Prova luce naturale e senza filtri.");
           setRitual("error");
           return;
         }
 
-        // 3) segmentation (upload only) — improves skin precision
+        // 3) segmentation
         let mask: any = null;
         try {
           mask = await segmentPersonOnImage(c);
@@ -816,45 +966,136 @@ if (!bmp) {
           mask = null;
         }
 
-        // multi-sample skin extraction -> stable median in Lab
-        const hexes: string[] = [];
-        for (let i = 0; i < 10; i++) {
-          const skin = extractSkinBaseHex({
+        // multi-sample regional extraction
+        let hexes: string[] = [];
+
+        // with mask
+        for (let i = 0; i < 8; i++) {
+          const f = extractSkinHexForRegions({
             ctx,
             canvasW: c.width,
             canvasH: c.height,
             landmarks,
             mirrorX,
             mask: mask ?? null,
+            applyWhiteBalance: false,
+            regions: ["forehead"],
           });
-          if (skin.ok) hexes.push(skin.hex);
+          const l = extractSkinHexForRegions({
+            ctx,
+            canvasW: c.width,
+            canvasH: c.height,
+            landmarks,
+            mirrorX,
+            mask: mask ?? null,
+            applyWhiteBalance: false,
+            regions: ["leftCheek"],
+          });
+          const r = extractSkinHexForRegions({
+            ctx,
+            canvasW: c.width,
+            canvasH: c.height,
+            landmarks,
+            mirrorX,
+            mask: mask ?? null,
+            applyWhiteBalance: false,
+            regions: ["rightCheek"],
+          });
+          if (f.ok) hexes.push(f.hex);
+          if (l.ok) hexes.push(l.hex);
+          if (r.ok) hexes.push(r.hex);
         }
 
-        if (hexes.length < 6) {
-          setLastFailReason("Non riesco a campionare la pelle in modo stabile. Prova una foto più luminosa.");
+        // fallback no mask
+        if (hexes.length < 10) {
+          hexes = [];
+          for (let i = 0; i < 10; i++) {
+            const f = extractSkinHexForRegions({
+              ctx,
+              canvasW: c.width,
+              canvasH: c.height,
+              landmarks,
+              mirrorX,
+              mask: null,
+              applyWhiteBalance: false,
+              regions: ["forehead"],
+            });
+            const l = extractSkinHexForRegions({
+              ctx,
+              canvasW: c.width,
+              canvasH: c.height,
+              landmarks,
+              mirrorX,
+              mask: null,
+              applyWhiteBalance: false,
+              regions: ["leftCheek"],
+            });
+            const r = extractSkinHexForRegions({
+              ctx,
+              canvasW: c.width,
+              canvasH: c.height,
+              landmarks,
+              mirrorX,
+              mask: null,
+              applyWhiteBalance: false,
+              regions: ["rightCheek"],
+            });
+            if (f.ok) hexes.push(f.hex);
+            if (l.ok) hexes.push(l.hex);
+            if (r.ok) hexes.push(r.hex);
+          }
+        }
+
+        if (hexes.length < 10) {
+          setLastFailReason("Non riesco a leggere bene la pelle. Viso frontale, senza filtri, più vicino.");
           setRitual("error");
           return;
         }
 
         const stableHex = pickStableHex(hexes);
-
         const pal = makePaletteFromSamples(stableHex);
-        saveLastPalette(pal);
+
+        const signals = getSkinSignalsFromHex(stableHex);
+        const conf = computeConfidenceFromHexes({ stableHex, hexes, quality01: combined });
+
+        const meta: ScanMeta = {
+          method: "upload",
+          confidence: conf.confidence,
+          undertone: signals.undertone,
+          depth: signals.depth,
+          lab: signals.lab,
+          sampleCount: hexes.length,
+          quality: Math.round(combined * 100),
+        };
+
+        saveLastPalette(pal, meta);
+
+        track("ScanCompleted", {
+          method: meta.method,
+          confidence: meta.confidence,
+          quality: meta.quality,
+          undertone: meta.undertone,
+          depth: meta.depth,
+          L: meta.lab.L,
+          a: meta.lab.a,
+          b: meta.lab.b,
+          samples: meta.sampleCount,
+        });
 
         setRitual("idle");
-        track("ScanCompleted", {
-  quality: percent,
-});
-        router.push("/result");
+        router.push(`/result?ts=${Date.now()}`);
       } catch {
         setLastFailReason("Errore nel caricamento foto. Riprova.");
         setRitual("error");
       } finally {
         setUploading(false);
-        if (fileInputRef.current) fileInputRef.current.value = "";
+        if (fileInputRef.current) {
+          fileInputRef.current.value = "";
+          fileInputRef.current.disabled = false;
+        }
       }
     },
-    [router, stopCamera]
+    [router, stopCamera, uploading]
   );
 
   // auto-open upload if /scan?upload=1
@@ -872,7 +1113,6 @@ if (!bmp) {
         ref={fileInputRef}
         type="file"
         accept="image/*"
-        // ✅ IMPORTANT: rimosso capture="user" per non forzare la fotocamera su mobile
         className="hidden"
         onChange={(e) => {
           const file = e.target.files?.[0];
@@ -881,7 +1121,7 @@ if (!bmp) {
         }}
       />
 
-      {/* Header (premium minimal) */}
+      {/* Header */}
       <header className="mx-auto flex max-w-6xl items-center justify-between px-5 pt-6">
         <div className="flex items-center gap-3">
           <div className="text-[12px] tracking-[0.22em] text-white/65">{BRAND}</div>
@@ -917,7 +1157,6 @@ if (!bmp) {
               </p>
             </div>
 
-            {/* Micro steps */}
             <div className="scanSteps">
               <div className="scanStep">
                 <div className="scanStepDot" />
@@ -952,7 +1191,6 @@ if (!bmp) {
               </div>
             )}
 
-            {/* Trust card */}
             <div className="scanTrust">
               <div className="scanTrustTitle">Privacy by design</div>
               <div className="scanTrustText">Il calcolo avviene sul tuo dispositivo. Nessun upload automatico.</div>

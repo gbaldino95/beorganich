@@ -1,5 +1,3 @@
-"use client";
-
 // app/lib/faceEngine.ts
 import {
   FaceLandmarker,
@@ -15,12 +13,17 @@ export type FaceBox = { x: number; y: number; w: number; h: number };
 // ✅ Tipi corretti per il fileset MediaPipe
 type VisionFileset = Awaited<ReturnType<typeof FilesetResolver.forVisionTasks>>;
 
-// ✅ Singleton promises (evita doppie init + risolve errori TS)
+// ✅ Singleton fileset
 let _filesetPromise: Promise<VisionFileset> | null = null;
 
-let _landmarker: FaceLandmarker | null = null;
-let _landmarkerPromise: Promise<FaceLandmarker> | null = null;
+// ✅ Landmarker: 2 istanze separate (IMAGE + VIDEO)
+let _landmarkerImage: FaceLandmarker | null = null;
+let _landmarkerVideo: FaceLandmarker | null = null;
 
+let _landmarkerImagePromise: Promise<FaceLandmarker> | null = null;
+let _landmarkerVideoPromise: Promise<FaceLandmarker> | null = null;
+
+// ✅ Segmenter singleton
 let _segmenter: ImageSegmenter | null = null;
 let _segmenterPromise: Promise<ImageSegmenter> | null = null;
 
@@ -31,7 +34,7 @@ const MP_WASM_BASE = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.
 const FACE_MODEL_URL =
   "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task";
 
-// Segmenter model (.tflite) — selfie/person segmentation (runs locally in wasm)
+// Segmenter model (.tflite)
 const SEGMENTER_MODEL_URL =
   "https://storage.googleapis.com/mediapipe-models/image_segmenter/selfie_segmenter/float16/1/selfie_segmenter.tflite";
 
@@ -57,27 +60,72 @@ async function getFileset(): Promise<VisionFileset> {
   return _filesetPromise;
 }
 
-/** Face Landmarker init (on-device WASM) */
-export async function getFaceLandmarker(): Promise<FaceLandmarker> {
-  if (_landmarker) return _landmarker;
-  if (_landmarkerPromise) return _landmarkerPromise;
+// ✅ reset helpers (anti “WASM stuck”)
+function resetLandmarker(mode: "IMAGE" | "VIDEO") {
+  if (mode === "IMAGE") {
+    _landmarkerImage = null;
+    _landmarkerImagePromise = null;
+  } else {
+    _landmarkerVideo = null;
+    _landmarkerVideoPromise = null;
+  }
+}
 
-  _landmarkerPromise = (async () => {
-    const vision = await getFileset();
+function resetSegmenter() {
+  _segmenter = null;
+  _segmenterPromise = null;
+}
 
-    const lm = await FaceLandmarker.createFromOptions(vision, {
-      baseOptions: { modelAssetPath: FACE_MODEL_URL },
-      numFaces: 1,
-      runningMode: "IMAGE", // will be switched to VIDEO at runtime
-      outputFaceBlendshapes: false,
-      outputFacialTransformationMatrixes: false,
-    });
+/** Face Landmarker init (on-device WASM) — separate instances per mode */
+export async function getFaceLandmarker(mode: "IMAGE" | "VIDEO"): Promise<FaceLandmarker> {
+  if (mode === "IMAGE") {
+    if (_landmarkerImage) return _landmarkerImage;
+    if (_landmarkerImagePromise) return _landmarkerImagePromise;
 
-    _landmarker = lm;
-    return lm;
+    _landmarkerImagePromise = (async () => {
+      try {
+        const vision = await getFileset();
+        const lm = await FaceLandmarker.createFromOptions(vision, {
+          baseOptions: { modelAssetPath: FACE_MODEL_URL },
+          numFaces: 1,
+          runningMode: "IMAGE",
+          outputFaceBlendshapes: false,
+          outputFacialTransformationMatrixes: false,
+        });
+        _landmarkerImage = lm;
+        return lm;
+      } catch (e) {
+        resetLandmarker("IMAGE");
+        throw e;
+      }
+    })();
+
+    return _landmarkerImagePromise;
+  }
+
+  // VIDEO
+  if (_landmarkerVideo) return _landmarkerVideo;
+  if (_landmarkerVideoPromise) return _landmarkerVideoPromise;
+
+  _landmarkerVideoPromise = (async () => {
+    try {
+      const vision = await getFileset();
+      const lm = await FaceLandmarker.createFromOptions(vision, {
+        baseOptions: { modelAssetPath: FACE_MODEL_URL },
+        numFaces: 1,
+        runningMode: "VIDEO",
+        outputFaceBlendshapes: false,
+        outputFacialTransformationMatrixes: false,
+      });
+      _landmarkerVideo = lm;
+      return lm;
+    } catch (e) {
+      resetLandmarker("VIDEO");
+      throw e;
+    }
   })();
 
-  return _landmarkerPromise;
+  return _landmarkerVideoPromise;
 }
 
 /** Image Segmenter init (on-device WASM) */
@@ -86,57 +134,157 @@ export async function getImageSegmenter(): Promise<ImageSegmenter> {
   if (_segmenterPromise) return _segmenterPromise;
 
   _segmenterPromise = (async () => {
-    const vision = await getFileset();
-
-    const seg = await ImageSegmenter.createFromOptions(vision, {
-      baseOptions: { modelAssetPath: SEGMENTER_MODEL_URL },
-      runningMode: "IMAGE",
-      outputCategoryMask: true,
-      outputConfidenceMasks: false,
-    });
-
-    _segmenter = seg;
-    return seg;
+    try {
+      const vision = await getFileset();
+      const seg = await ImageSegmenter.createFromOptions(vision, {
+        baseOptions: { modelAssetPath: SEGMENTER_MODEL_URL },
+        runningMode: "IMAGE",
+        outputCategoryMask: true,
+        outputConfidenceMasks: false,
+      });
+      _segmenter = seg;
+      return seg;
+    } catch (e) {
+      resetSegmenter();
+      throw e;
+    }
   })();
 
   return _segmenterPromise;
 }
 
 /** Detect face landmarks on IMAGE (canvas/image/bitmap) */
-export async function detectFaceOnImage(input: HTMLCanvasElement | HTMLImageElement | ImageBitmap) {
-  const lm = await getFaceLandmarker();
-  lm.setOptions({ runningMode: "IMAGE" });
+/** Detect face landmarks on IMAGE (canvas/image) — robust (no ImageBitmap) */
+export async function detectFaceOnImage(
+  input: HTMLCanvasElement | HTMLImageElement | ImageBitmap
+) {
+  const lm = await getFaceLandmarker("IMAGE");
 
-  const res: FaceLandmarkerResult = lm.detect(input);
-  const face = res.faceLandmarks?.[0];
-  if (!face?.length) return null;
+  // ---- guard: input deve avere dimensioni valide ----
+  const w =
+    input instanceof HTMLImageElement
+      ? input.naturalWidth
+      : (input as any).width ?? 0;
 
-  return face as Landmark[];
+  const h =
+    input instanceof HTMLImageElement
+      ? input.naturalHeight
+      : (input as any).height ?? 0;
+
+  if (!w || !h) return null;
+
+  // ---- try 1: detect diretto (quando supportato) ----
+  try {
+    const res = lm.detect(input as any) as FaceLandmarkerResult;
+    const face = res.faceLandmarks?.[0];
+    if (!face?.length) return null;
+    return face as Landmark[];
+  } catch {
+    // continua
+  }
+
+  // ---- try 2: se è un canvas, ripassa il canvas stesso (spesso più stabile) ----
+  try {
+    if (input instanceof HTMLCanvasElement) {
+      const res = lm.detect(input as any) as FaceLandmarkerResult;
+      const face = res.faceLandmarks?.[0];
+      if (!face?.length) return null;
+      return face as Landmark[];
+    }
+  } catch {
+    // continua
+  }
+
+  // ---- try 3: fallback universale: ImageData ----
+  try {
+    const off = document.createElement("canvas");
+    off.width = w;
+    off.height = h;
+    const ctx = off.getContext("2d", { willReadFrequently: true });
+    if (!ctx) return null;
+
+    // reset transform (iOS/orientation safety)
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, w, h);
+
+    if (input instanceof HTMLImageElement) {
+      ctx.drawImage(input, 0, 0, w, h);
+    } else {
+      // canvas o bitmap -> disegniamo comunque
+      ctx.drawImage(input as any, 0, 0, w, h);
+    }
+
+    const imgData = ctx.getImageData(0, 0, w, h);
+    const res = lm.detect(imgData as any) as FaceLandmarkerResult;
+    const face = res.faceLandmarks?.[0];
+    if (!face?.length) return null;
+    return face as Landmark[];
+  } catch {
+    return null;
+  }
 }
 
 /** Detect face landmarks on VIDEO */
 export async function detectFaceOnVideo(video: HTMLVideoElement, timestampMs: number) {
-  const lm = await getFaceLandmarker();
-  lm.setOptions({ runningMode: "VIDEO" });
+  let lm: FaceLandmarker;
+  try {
+    lm = await getFaceLandmarker("VIDEO");
+  } catch {
+    resetLandmarker("VIDEO");
+    return null;
+  }
 
-  const res: FaceLandmarkerResult = lm.detectForVideo(video, timestampMs);
-  const face = res.faceLandmarks?.[0];
-  if (!face?.length) return null;
-
-  return face as Landmark[];
+  try {
+    const res: FaceLandmarkerResult = lm.detectForVideo(video, timestampMs);
+    const face = res.faceLandmarks?.[0];
+    if (!face?.length) return null;
+    return face as Landmark[];
+  } catch {
+    resetLandmarker("VIDEO");
+    return null;
+  }
 }
+
+type Mask = { w: number; h: number; data: Float32Array | Uint8Array };
 
 /** Segment person mask on IMAGE (canvas/image/bitmap) */
 export async function segmentPersonOnImage(input: HTMLCanvasElement | HTMLImageElement | ImageBitmap) {
-  const seg = await getImageSegmenter();
-  seg.setOptions({ runningMode: "IMAGE" });
+  // guard: dimensioni valide
+  const w = input instanceof HTMLImageElement ? input.naturalWidth : (input as any).width ?? 0;
+  const h = input instanceof HTMLImageElement ? input.naturalHeight : (input as any).height ?? 0;
+  if (!w || !h) return null;
 
-  const res: ImageSegmenterResult = seg.segment(input);
+  let seg: ImageSegmenter;
+  try {
+    seg = await getImageSegmenter();
+  } catch {
+    resetSegmenter();
+    return null;
+  }
+
+  // ✅ sempre ImageBitmap
+  let bmp: ImageBitmap | null = null;
+  try {
+    bmp = input instanceof ImageBitmap ? input : await createImageBitmap(input as any);
+  } catch {
+    bmp = null;
+  }
+  if (!bmp) return null;
+
+  let res: ImageSegmenterResult | null = null;
+  try {
+    res = seg.segment(bmp as any) as ImageSegmenterResult;
+  } catch {
+    resetSegmenter();
+    res = null;
+  }
+  if (!res) return null;
+
   const mask = res.categoryMask;
   if (!mask) return null;
 
-  const w = (mask as any).width ?? (input as any).width ?? 0;
-  const h = (mask as any).height ?? (input as any).height ?? 0;
+  const mw = (mask as any).width ?? (bmp as any).width ?? 0;
+  const mh = (mask as any).height ?? (bmp as any).height ?? 0;
 
   let data: Float32Array | Uint8Array | null = null;
   try {
@@ -149,7 +297,7 @@ export async function segmentPersonOnImage(input: HTMLCanvasElement | HTMLImageE
   }
   if (!data) return null;
 
-  return { w, h, data };
+  return { w: mw, h: mh, data };
 }
 
 function estimateGrayWorldMultipliers(samples: Array<{ r: number; g: number; b: number }>) {
@@ -181,8 +329,6 @@ function applyWB(s: { r: number; g: number; b: number }, k: { kr: number; kg: nu
   };
 }
 
-type Mask = { w: number; h: number; data: Float32Array | Uint8Array };
-
 /** Get mask value (0..1) mapping canvas coords -> mask coords */
 function maskValueAt(mask: Mask, canvasW: number, canvasH: number, x: number, y: number) {
   const mx = clamp(Math.round((x / canvasW) * (mask.w - 1)), 0, mask.w - 1);
@@ -191,14 +337,10 @@ function maskValueAt(mask: Mask, canvasW: number, canvasH: number, x: number, y:
 
   const v = mask.data[idx];
   if (mask.data instanceof Uint8Array) return v / 255;
-
   return clamp(v, 0, 1);
 }
 
-/**
- * Robust sampling disk around a point.
- * If mask provided, only accept pixels where mask indicates "person" enough.
- */
+/** Sampling disk */
 function sampleDisk(
   ctx: CanvasRenderingContext2D,
   cx: number,
@@ -245,8 +387,9 @@ function sampleDisk(
       if (aa < 225) continue;
 
       const lum = (rr + gg + bb) / 3;
-      if (lum < 28) continue;
-      if (lum > 240) continue;
+// ✅ più permissivo: include pelle scura ed evita solo nero totale / bianco bruciato
+if (lum < 10) continue;
+if (lum > 248) continue;
 
       out.push({ r: rr, g: gg, b: bb });
     }
@@ -261,15 +404,82 @@ const REGION_POINTS = {
   leftCheek: [50, 101, 118, 205],
   rightCheek: [280, 330, 347, 425],
 };
+export function extractSkinHexForRegions(params: {
+  ctx: CanvasRenderingContext2D;
+  canvasW: number;
+  canvasH: number;
+  landmarks: Landmark[];
+  regions: Array<"forehead" | "leftCheek" | "rightCheek">;
+  mirrorX?: boolean;
+  mask?: any | null;
+  applyWhiteBalance?: boolean;
+}) {
+  const { ctx, canvasW, canvasH, landmarks, regions, mirrorX, mask, applyWhiteBalance = true } = params;
 
-/**
- * Extract stable skin base hex from landmarks + canvas.
- * Uses:
- * - optional segmentation mask (person)
- * - landmark regions (face only)
- * - gray-world WB
- * - per-channel median
- */
+  const pts: Array<{ x: number; y: number }> = [];
+  const add = (idx: number) => {
+    const lm = landmarks[idx];
+    if (!lm) return;
+    const nx = mirrorX ? 1 - lm.x : lm.x;
+    pts.push({ x: nx * canvasW, y: lm.y * canvasH });
+  };
+
+  for (const region of regions) {
+    const arr = (REGION_POINTS as any)[region] as number[] | undefined;
+    if (!arr) continue;
+    for (const i of arr) add(i);
+  }
+
+  if (pts.length < 4) {
+    return { ok: false as const, hex: "#777777", reason: "no_points" as const };
+  }
+
+  // stima scala volto
+  const a = pts[0];
+  const b = pts[pts.length - 1];
+  const faceScale = Math.hypot(a.x - b.x, a.y - b.y) || 140;
+  const radius = clamp(faceScale * 0.03, 6, 22);
+
+  const maskThreshold = mask ? 0.22 : 0.0;
+
+  let samples: Array<{ r: number; g: number; b: number }> = [];
+  for (const p of pts) {
+    samples = samples.concat(sampleDisk(ctx, p.x, p.y, radius, mask ?? null, maskThreshold));
+  }
+
+  if (samples.length < 120 && mask) {
+    let relaxed: Array<{ r: number; g: number; b: number }> = [];
+    for (const p of pts) {
+      relaxed = relaxed.concat(sampleDisk(ctx, p.x, p.y, radius, mask, 0.12));
+    }
+    if (relaxed.length >= 120) samples = relaxed;
+  }
+
+  if (samples.length < 120) {
+    return { ok: false as const, hex: "#777777", reason: "few_samples" as const, samples: samples.length };
+  }
+
+  // ✅ lum più permissivo (include pelle scura)
+  const mids = samples.filter((s) => {
+    const lum = (s.r + s.g + s.b) / 3;
+    return lum > 18 && lum < 235;
+  });
+
+  const wb = applyWhiteBalance
+    ? samples.map((s) => applyWB(s, estimateGrayWorldMultipliers(mids.length ? mids : samples)))
+    : samples;
+
+  const rs = wb.map((s) => s.r);
+  const gs = wb.map((s) => s.g);
+  const bs = wb.map((s) => s.b);
+
+  const r = median(rs);
+  const g = median(gs);
+  const b2 = median(bs);
+
+  const hex = hexFromRGB(r, g, b2);
+  return { ok: true as const, hex, sampleCount: samples.length };
+}
 export function extractSkinBaseHex(params: {
   ctx: CanvasRenderingContext2D;
   canvasW: number;
@@ -277,8 +487,9 @@ export function extractSkinBaseHex(params: {
   landmarks: Landmark[];
   mirrorX?: boolean;
   mask?: Mask | null;
+  applyWhiteBalance?: boolean;
 }) {
-  const { ctx, canvasW, canvasH, landmarks, mirrorX, mask } = params;
+  const { ctx, canvasW, canvasH, landmarks, mirrorX, mask, applyWhiteBalance = true } = params;
 
   const pts: Array<{ x: number; y: number }> = [];
   const add = (idx: number) => {
@@ -299,7 +510,6 @@ export function extractSkinBaseHex(params: {
   const a = pts[4];
   const b = pts[8] ?? pts[0];
   const faceScale = Math.hypot(a.x - b.x, a.y - b.y) || 140;
-
   const radius = clamp(faceScale * 0.03, 6, 22);
 
   const maskThreshold = mask ? 0.35 : 0.0;
@@ -309,14 +519,12 @@ export function extractSkinBaseHex(params: {
     samples = samples.concat(sampleDisk(ctx, p.x, p.y, radius, mask ?? null, maskThreshold));
   }
 
-  if (samples.length < 120) {
-    if (mask) {
-      let relaxed: Array<{ r: number; g: number; b: number }> = [];
-      for (const p of pts) {
-        relaxed = relaxed.concat(sampleDisk(ctx, p.x, p.y, radius, mask, 0.20));
-      }
-      if (relaxed.length >= 120) samples = relaxed;
+  if (samples.length < 120 && mask) {
+    let relaxed: Array<{ r: number; g: number; b: number }> = [];
+    for (const p of pts) {
+      relaxed = relaxed.concat(sampleDisk(ctx, p.x, p.y, radius, mask, 0.2));
     }
+    if (relaxed.length >= 120) samples = relaxed;
   }
 
   if (samples.length < 120) {
@@ -324,12 +532,14 @@ export function extractSkinBaseHex(params: {
   }
 
   const mids = samples.filter((s) => {
-    const lum = (s.r + s.g + s.b) / 3;
-    return lum > 45 && lum < 210;
-  });
+  const lum = (s.r + s.g + s.b) / 3;
+  // ✅ include pelle scura e non elimina troppo
+  return lum > 18 && lum < 235;
+});
 
-  const k = estimateGrayWorldMultipliers(mids.length ? mids : samples);
-  const wb = samples.map((s) => applyWB(s, k));
+  const wb = applyWhiteBalance
+  ? samples.map((s) => applyWB(s, estimateGrayWorldMultipliers(mids.length ? mids : samples)))
+  : samples;
 
   const rs = wb.map((s) => s.r);
   const gs = wb.map((s) => s.g);
@@ -342,16 +552,15 @@ export function extractSkinBaseHex(params: {
   const hex = hexFromRGB(r, g, b2);
   return { ok: true as const, hex, sampleCount: samples.length };
 }
-export function computeFaceBoxFromLandmarks(
-  landmarks: Landmark[],
-  canvasW: number,
-  canvasH: number,
-  mirrorX?: boolean
-): FaceBox {
-  let minX = 1, minY = 1, maxX = 0, maxY = 0;
+
+export function computeFaceBoxFromLandmarks(landmarks: Landmark[], canvasW: number, canvasH: number, mirrorX?: boolean): FaceBox {
+  let minX = 1,
+    minY = 1,
+    maxX = 0,
+    maxY = 0;
 
   for (const lm of landmarks) {
-    const x = (mirrorX ? 1 - lm.x : lm.x);
+    const x = mirrorX ? 1 - lm.x : lm.x;
     const y = lm.y;
     if (x < minX) minX = x;
     if (y < minY) minY = y;
@@ -367,24 +576,17 @@ export function computeFaceBoxFromLandmarks(
   return { x, y, w, h };
 }
 
-export function isFacePlausible(
-  face: FaceBox,
-  canvasW: number,
-  canvasH: number
-) {
-  // faccia troppo piccola = probabilmente non è un volto valido
+export function isFacePlausible(face: FaceBox, canvasW: number, canvasH: number) {
   const area = face.w * face.h;
   const canvasArea = canvasW * canvasH;
   const areaRatio = area / canvasArea;
 
-  // centro
   const cx = face.x + face.w / 2;
   const cy = face.y + face.h / 2;
   const dx = Math.abs(cx - canvasW / 2) / (canvasW / 2);
   const dy = Math.abs(cy - canvasH / 2) / (canvasH / 2);
 
-  // soglie “safe”
-  const okSize = areaRatio > 0.06;     // ~6% area (se vuoi più rigido: 0.08)
+  const okSize = areaRatio > 0.06;
   const okCenter = dx < 0.55 && dy < 0.55;
 
   return { ok: okSize && okCenter, areaRatio, dx, dy };
