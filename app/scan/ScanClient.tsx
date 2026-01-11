@@ -848,7 +848,11 @@ if (!bmp) {
 
      setRitual("idle");
 
+// per tracking / eventi
 const qualityPct = Math.round(combined * 100);
+
+// per UI live
+const percent = Math.round(quality * 100);
 
 // eventi standard + custom
 track("Lead", { value: 1, currency: "EUR" });
