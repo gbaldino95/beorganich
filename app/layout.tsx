@@ -74,7 +74,7 @@ export default function RootLayout({
                 a.parentNode.insertBefore(o, a);
               };
 
-              ttq.load("D5HMVMRC77UA3NVKE3GO");
+              ttq.load('D5HMVMRC77UA3NVKE3GO');
               ttq.page();
             }(window, document, 'ttq');
           `}
