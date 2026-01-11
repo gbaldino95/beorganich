@@ -1,6 +1,16 @@
 // app/scan/ScanClient.tsx
 "use client";
+declare global {
+  interface Window {
+    ttq?: any;
+  }
+}
 
+function track(event: string, data: Record<string, any> = {}) {
+  if (typeof window !== "undefined" && window.ttq) {
+    window.ttq.track(event, data);
+  }
+}
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -669,6 +679,9 @@ export default function ScanPage() {
   }, [router, stopCamera]);
 
   const startRitual = useCallback(async () => {
+    track("StartScan", {
+  method: "camera",
+});
     setLastFailReason(null);
     setRitual("loading");
     setQuality(0);
@@ -702,6 +715,9 @@ export default function ScanPage() {
 
   const onUploadFile = useCallback(
     async (file: File) => {
+        track("UploadPhoto", {
+  source: "gallery",
+});
       setLastFailReason(null);
       setUploading(true);
       setRitual("loading");
@@ -826,6 +842,10 @@ if (!bmp) {
         saveLastPalette(pal);
 
         setRitual("idle");
+        track("ScanCompleted", {
+  quality: percent,
+});
+track("ScanCompleted", { quality: Math.round(quality * 100) });
         router.push("/result");
       } catch {
         setLastFailReason("Errore nel caricamento foto. Riprova.");
@@ -870,9 +890,15 @@ if (!bmp) {
         </div>
 
         <div className="flex items-center gap-2">
-          <a className="pillButton" href={SHOP_URL} target="_blank" rel="noreferrer">
-            Shop
-          </a>
+          <a
+  className="pillButton"
+  href={SHOP_URL}
+  target="_blank"
+  rel="noreferrer"
+  onClick={() => track("ShopClick")}
+>
+  Shop
+</a>
           <Link className="pillButton subtle" href="/">
             Home
           </Link>
