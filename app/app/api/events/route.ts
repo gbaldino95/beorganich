@@ -1,21 +1,22 @@
 import { NextResponse } from "next/server";
-import { neon } from "@neondatabase/serverless";
+import { getSql } from "@/app/lib/db";
 
-export const runtime = "nodejs"; // stabile (evita problemi edge)
-
-const sql = neon(process.env.DATABASE_URL!);
-
-function clampInt(n: any, min: number, max: number) {
-  const x = Number(n);
-  if (!Number.isFinite(x)) return null;
-  return Math.max(min, Math.min(max, Math.round(x)));
+/* ---------------- Utils ---------------- */
+function clampInt(v: any, min: number, max: number): number | null {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return null;
+  return Math.max(min, Math.min(max, Math.round(n)));
 }
 
+/* ---------------- POST handler ---------------- */
 export async function POST(req: Request) {
   try {
+    // ✅ se manca DB → non blocchiamo l’app
     if (!process.env.DATABASE_URL) {
-      return NextResponse.json({ ok: false, error: "Missing DATABASE_URL" }, { status: 500 });
+      return NextResponse.json({ ok: true });
     }
+
+    const sql = getSql();
 
     const body = await req.json().catch(() => null);
     if (!body || typeof body !== "object") {
@@ -40,19 +41,32 @@ export async function POST(req: Request) {
 
     const ua = req.headers.get("user-agent")?.slice(0, 240) ?? null;
 
-    // payload extra anonimo (non mettere foto/base64!)
-    const payload = body.payload && typeof body.payload === "object" ? body.payload : null;
+    // payload extra anonimo (NO immagini / NO base64)
+    const payload =
+      body.payload && typeof body.payload === "object" ? body.payload : null;
 
     await sql`
       insert into public.telemetry_events
         (event, path, session_id, method, confidence, quality, undertone, depth, samples, ua, payload)
       values
-        (${event}, ${path}, ${sessionId}, ${method}, ${confidence}, ${quality}, ${undertone}, ${depth}, ${samples}, ${ua}, ${payload})
+        (
+          ${event},
+          ${path},
+          ${sessionId},
+          ${method},
+          ${confidence},
+          ${quality},
+          ${undertone},
+          ${depth},
+          ${samples},
+          ${ua},
+          ${payload}
+        )
     `;
 
     return NextResponse.json({ ok: true });
-  } catch {
-    // non bloccare UX se Neon ha problemi
+  } catch (err) {
+    // 🔒 Telemetria NON deve mai rompere UX
     return NextResponse.json({ ok: true });
   }
 }
