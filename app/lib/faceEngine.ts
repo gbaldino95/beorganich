@@ -38,6 +38,7 @@ const FACE_MODEL_URL =
 const SEGMENTER_MODEL_URL =
   "https://storage.googleapis.com/mediapipe-models/image_segmenter/selfie_segmenter/float16/1/selfie_segmenter.tflite";
 
+  let _lastVideoTs = 0;
 function clamp(n: number, a: number, b: number) {
   return Math.max(a, Math.min(b, n));
 }
@@ -225,22 +226,27 @@ export async function detectFaceOnImage(
 }
 
 /** Detect face landmarks on VIDEO */
-export async function detectFaceOnVideo(video: HTMLVideoElement, timestampMs: number) {
-  let lm: FaceLandmarker;
-  try {
-    lm = await getFaceLandmarker("VIDEO");
-  } catch {
-    resetLandmarker("VIDEO");
-    return null;
-  }
 
+export async function detectFaceOnVideo(video: HTMLVideoElement, timestampMs: number) {
   try {
-    const res: FaceLandmarkerResult = lm.detectForVideo(video, timestampMs);
+    const lm = await getFaceLandmarker("VIDEO");
+
+    // ✅ guard: video pronto
+    if (!video.videoWidth || !video.videoHeight) return null;
+    if (video.readyState < 2) return null; // HAVE_CURRENT_DATA
+
+    // ✅ timestamp SEMPRE monotono (MediaPipe VIDEO lo pretende)
+    const raw = Number.isFinite(timestampMs) ? timestampMs : performance.now();
+    const t = Math.max(raw, _lastVideoTs + 1);
+    _lastVideoTs = t;
+
+    const res = lm.detectForVideo(video, t) as FaceLandmarkerResult;
     const face = res.faceLandmarks?.[0];
     if (!face?.length) return null;
+
     return face as Landmark[];
-  } catch {
-    resetLandmarker("VIDEO");
+  } catch (e) {
+    // ✅ evita overlay error in dev
     return null;
   }
 }

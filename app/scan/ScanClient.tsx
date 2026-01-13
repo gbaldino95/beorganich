@@ -4,7 +4,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-
+import { trackEvent } from "@/app/lib/telemetry";
 import { type PaletteItem, makePaletteFromSamples } from "@/app/lib/paletteLogic";
 
 // ✅ MediaPipe on-device engine
@@ -640,6 +640,7 @@ export default function ScanPage() {
   useEffect(() => () => stopCamera(), [stopCamera]);
 
   const startCamera = useCallback(async () => {
+    trackEvent("StartScan", { method: "camera" }, "/scan");
     stopCamera();
     const stream = await navigator.mediaDevices.getUserMedia({
       video: { facingMode: "user", width: { ideal: 1280 }, height: { ideal: 720 } },
@@ -683,7 +684,7 @@ export default function ScanPage() {
 
     if (doDetect) {
       try {
-        landmarks = await detectFaceOnVideo(v, Date.now());
+       landmarks = await detectFaceOnVideo(v, performance.now());
       } catch {
         landmarks = null;
       }
@@ -781,18 +782,31 @@ export default function ScanPage() {
       };
 
       saveLastPalette(pal, meta);
+      
 
-      track("ScanCompleted", {
-        method: meta.method,
-        confidence: meta.confidence,
-        quality: meta.quality,
-        undertone: meta.undertone,
-        depth: meta.depth,
-        L: meta.lab.L,
-        a: meta.lab.a,
-        b: meta.lab.b,
-        samples: meta.sampleCount,
-      });
+   // TikTok Pixel (conversione)
+track("ScanCompleted", {
+  method: meta.method,
+  confidence: meta.confidence,
+  quality: meta.quality,
+  undertone: meta.undertone,
+  depth: meta.depth,
+  samples: meta.sampleCount,
+});
+
+// DB / Telemetria interna
+trackEvent(
+  "ScanCompleted",
+  {
+    method: meta.method,
+    confidence: meta.confidence,
+    quality: meta.quality,
+    undertone: meta.undertone,
+    depth: meta.depth,
+    samples: meta.sampleCount,
+  },
+  "/scan"
+);
 
       stopCamera();
       router.push(`/result?ts=${Date.now()}`);
@@ -1070,18 +1084,40 @@ export default function ScanPage() {
 
         saveLastPalette(pal, meta);
 
-        track("ScanCompleted", {
-          method: meta.method,
-          confidence: meta.confidence,
-          quality: meta.quality,
-          undertone: meta.undertone,
-          depth: meta.depth,
-          L: meta.lab.L,
-          a: meta.lab.a,
-          b: meta.lab.b,
-          samples: meta.sampleCount,
-        });
+     track("ScanCompleted", {
+  method: meta.method,
+  confidence: meta.confidence,
+  quality: meta.quality,
+  undertone: meta.undertone,
+  depth: meta.depth,
+  samples: meta.sampleCount,
+});
 
+trackEvent(
+  "ScanCompleted",
+  {
+    method: meta.method,
+    confidence: meta.confidence,
+    quality: meta.quality,
+    undertone: meta.undertone,
+    depth: meta.depth,
+    samples: meta.sampleCount,
+  },
+  "/scan"
+);
+router.push(`/result?ts=${Date.now()}`);
+trackEvent(
+  "ScanCompleted",
+  {
+    method: meta.method,
+    confidence: meta.confidence,
+    quality: meta.quality,
+    undertone: meta.undertone,
+    depth: meta.depth,
+    samples: meta.sampleCount,
+  },
+  "/scan"
+);
         setRitual("idle");
         router.push(`/result?ts=${Date.now()}`);
       } catch {
@@ -1198,6 +1234,7 @@ export default function ScanPage() {
           </section>
 
           {/* RIGHT */}
+          <div id="scan" className="scroll-mt-24" />
           <section className="space-y-4">
             <div className="scanShell">
               <div className="scanAurora" aria-hidden />
