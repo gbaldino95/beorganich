@@ -599,13 +599,14 @@ export default function ScanPage() {
   const streamRef = useRef<MediaStream | null>(null);
   const rafRef = useRef<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const scanAnchorRef = useRef<HTMLDivElement | null>(null);
 
   const [ritual, setRitual] = useState<RitualState>("idle");
   const [quality, setQuality] = useState(0);
   const [qualityHint, setQualityHint] = useState("Analisi discreta. Nessuna foto salvata.");
   const [lastFailReason, setLastFailReason] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
-
+  const [scanFull, setScanFull] = useState(false);
   const goodFramesRef = useRef(0);
   const smoothedQualityRef = useRef(0);
   const stableHexesRef = useRef<string[]>([]);
@@ -638,9 +639,21 @@ export default function ScanPage() {
   }, []);
 
   useEffect(() => () => stopCamera(), [stopCamera]);
+  const scrollToScan = useCallback(() => {
+  const el = scanAnchorRef.current || document.getElementById("scan");
+  if (!el) return;
+
+  requestAnimationFrame(() => {
+    el.scrollIntoView({ behavior: "smooth", block: "start" });
+    setTimeout(() => {
+      el.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 250);
+  });
+}, []);
 
   const startCamera = useCallback(async () => {
     trackEvent("StartScan", { method: "camera" }, "/scan");
+    setScanFull(false);
     stopCamera();
     const stream = await navigator.mediaDevices.getUserMedia({
       video: { facingMode: "user", width: { ideal: 1280 }, height: { ideal: 720 } },
@@ -684,7 +697,7 @@ export default function ScanPage() {
 
     if (doDetect) {
       try {
-       landmarks = await detectFaceOnVideo(v, performance.now());
+       landmarks = await detectFaceOnVideo(v, performance.now()); 
       } catch {
         landmarks = null;
       }
@@ -833,7 +846,8 @@ trackEvent(
     try {
       setQualityHint(`Carico il motore… (solo la prima volta)${webgpuRef.current ? " · WebGPU ✓" : ""}`);
       await startCamera();
-
+      setScanFull(true);
+      scrollToScan();
       setRitual("calibrating");
       setQualityHint("Resta al centro. Un secondo di calma. Poi… magia.");
 
@@ -883,6 +897,7 @@ trackEvent(
       setUploading(true);
       setRitual("loading");
       stopCamera();
+      setScanFull(false);
 
       if (fileInputRef.current) fileInputRef.current.disabled = true;
 
@@ -1105,6 +1120,7 @@ trackEvent(
   },
   "/scan"
 );
+setScanFull(false);
 router.push(`/result?ts=${Date.now()}`);
 trackEvent(
   "ScanCompleted",
@@ -1233,55 +1249,82 @@ trackEvent(
             </div>
           </section>
 
-          {/* RIGHT */}
-          <div id="scan" className="scroll-mt-24" />
-          <section className="space-y-4">
-            <div className="scanShell">
-              <div className="scanAurora" aria-hidden />
-              <div className="scanNoise" aria-hidden />
+ {/* RIGHT */}
+<section
+  className={[
+"space-y-4",
+    scanFull ? "fixed inset-0 z-50 bg-black p-5 pt-6 overflow-auto lg:static lg:z-auto lg:p-0" : "",
+  ].join(" ")}
+>{scanFull && (
+  <div className="flex items-center justify-between pb-3 lg:hidden">
+    <div className="text-[12px] tracking-[0.22em] text-white/65">{BRAND}</div>
+    <button
+      onClick={() => {
+        setScanFull(false);
+        stopCamera();
+      }}
+      className="pillButton subtle"
+    >
+      Chiudi
+    </button>
+  </div>
+)}
+  {/* 👇 ANCHOR (UNO SOLO) */}
+  <div ref={scanAnchorRef} id="scan" className="scroll-mt-24" />
 
-              <div className="scanFrame">
-                <video
-                  ref={videoRef}
-                  playsInline
-                  muted
-                  className={["scanVideo", ritual === "calibrating" || ritual === "loading" ? "on" : "off"].join(" ")}
-                />
+  <div className="scanShell">
+    <div className="scanAurora" aria-hidden />
+    <div className="scanNoise" aria-hidden />
 
-                <div className="scanVignette" aria-hidden />
+    <div className="scanFrame">
+      <video
+        ref={videoRef}
+        playsInline
+        muted
+        className={[
+          "scanVideo",
+          ritual === "calibrating" || ritual === "loading" ? "on" : "off",
+        ].join(" ")}
+      />
 
-                <div className="scanOverlay">
-                  <div className="scanTopRow">
-                    <div className="scanChip">
-                      {ritual === "loading" ? "Avvio…" : ritual === "calibrating" ? "Calibrazione" : "Pronto"}
-                    </div>
-                    <div className="scanChip subtle">
-                      Qualità <span className="tabular-nums">{percent}%</span>
-                    </div>
-                  </div>
+      <div className="scanVignette" aria-hidden />
 
-                  <div className={["scanRing", ritual === "calibrating" ? "pulse" : ""].join(" ")} />
+      <div className="scanOverlay">
+        <div className="scanTopRow">
+          <div className="scanChip">
+            {ritual === "loading"
+              ? "Avvio…"
+              : ritual === "calibrating"
+              ? "Calibrazione"
+              : "Pronto"}
+          </div>
+          <div className="scanChip subtle">
+            Qualità <span className="tabular-nums">{percent}%</span>
+          </div>
+        </div>
 
-                  <div className="scanBottom">
-                    <div className="scanHint">{qualityHint}</div>
+        <div className={["scanRing", ritual === "calibrating" ? "pulse" : ""].join(" ")} />
 
-                    <div className="scanBar">
-                      <div className="scanFill" style={{ width: `${percent}%` }} />
-                      <div className="scanTarget" style={{ left: `${Math.round(THRESHOLD * 100)}%` }} />
-                    </div>
+        <div className="scanBottom">
+          <div className="scanHint">{qualityHint}</div>
 
-                    <div className="scanMeta">
-                      <span className="scanMetaItem">Target: {Math.round(THRESHOLD * 100)}%</span>
-                      <span className="scanMetaSep">•</span>
-                      <span className="scanMetaItem">Face engine: ON</span>
-                    </div>
-                  </div>
-                </div>
+          <div className="scanBar">
+            <div className="scanFill" style={{ width: `${percent}%` }} />
+            <div className="scanTarget" style={{ left: `${Math.round(THRESHOLD * 100)}%` }} />
+          </div>
 
-                <canvas ref={canvasRef} className="hidden" />
-              </div>
-            </div>
-          </section>
+          <div className="scanMeta">
+            <span className="scanMetaItem">Target: {Math.round(THRESHOLD * 100)}%</span>
+            <span className="scanMetaSep">•</span>
+            <span className="scanMetaItem">Face engine: ON</span>
+          </div>
+        </div>
+      </div>
+
+      <canvas ref={canvasRef} className="hidden" />
+    </div>
+  </div>
+</section>
         </div>
       </main>
 
