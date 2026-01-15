@@ -2122,3 +2122,472 @@ input, button, select, textarea {
   aspect-ratio: auto !important;
   padding-bottom: 0 !important;
 }
+/* ===== Stripe-like atoms ===== */
+.stripeEyebrow{
+  font-size:11px;
+  letter-spacing:.22em;
+  text-transform:uppercase;
+  color:rgba(255,255,255,.75);
+}
+.stripeDot{
+  width:4px;height:4px;border-radius:999px;
+  background:rgba(255,255,255,.35);
+  display:inline-block;
+}
+
+.stripeCard{
+  border:1px solid rgba(255,255,255,.10);
+  background:rgba(255,255,255,.03);
+  border-radius:20px;
+  padding:16px;
+}
+.stripeCardTitle{
+  font-size:13px;
+  font-weight:600;
+  color:rgba(255,255,255,.92);
+}
+.stripeList{
+  margin-top:10px;
+  display:grid;
+  gap:8px;
+  font-size:13px;
+  line-height:1.55;
+  color:rgba(255,255,255,.70);
+}
+.stripeList li{
+  display:flex;
+  gap:10px;
+  align-items:flex-start;
+}
+.stripeBullet{
+  width:6px;height:6px;border-radius:999px;
+  background:rgba(255,255,255,.35);
+  margin-top:8px;
+  flex:none;
+}
+
+.stripeBadges{
+  margin-top:12px;
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+}
+
+/* Badge NON cliccabile (non sembra button) */
+.stripeBadge{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  border:1px solid rgba(255,255,255,.12);
+  background:rgba(255,255,255,.04);
+  color:rgba(255,255,255,.70);
+  border-radius:999px;
+  padding:6px 10px;
+  font-size:12px;
+  user-select:none;
+  cursor:default;
+}
+
+/* CTA proof box */
+.stripeMiniProof{
+  border:1px solid rgba(255,255,255,.10);
+  background:rgba(255,255,255,.03);
+  border-radius:20px;
+  padding:14px;
+}
+.stripeMiniProofTop{
+  display:grid;
+  gap:2px;
+}
+.stripeMiniProofBadges{
+  margin-top:10px;
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+}
+
+/* ===== Preview shell (NO spazio vuoto) ===== */
+.stripePreviewShell{
+  position:relative;
+  border-radius:24px;
+  border:1px solid rgba(255,255,255,.10);
+  background:rgba(255,255,255,.02);
+  overflow:hidden;
+  padding:16px;
+}
+
+/* Header della preview più “Stripe” */
+.stripePreviewTop{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:12px;
+  margin-bottom:12px;
+}
+.stripePreviewTitle{
+  font-size:13px;
+  font-weight:600;
+  color:rgba(255,255,255,.92);
+}
+.stripePreviewSub{
+  margin-top:2px;
+  font-size:12px;
+  color:rgba(255,255,255,.55);
+}
+
+.stripePreviewNote{
+  margin-top:10px;
+  font-size:12px;
+  color:rgba(255,255,255,.55);
+}
+
+/* IMPORTANT: se avevi cameraShell con min-height/justify-between, questa preview la sostituisce */
+.cameraShell{
+  height:auto;
+  min-height:0;
+}
+/* ===== RESULT – conversion first ===== */
+
+.resultTopChip{
+  border:1px solid rgba(255,255,255,.14);
+  background:rgba(255,255,255,.05);
+  color:rgba(255,255,255,.80);
+  border-radius:999px;
+  padding:7px 10px;
+  font-size:11px;
+  letter-spacing:.18em;
+  user-select:none;
+  cursor:default;
+}
+
+/* HERO */
+.resultHeroX{
+  border:1px solid rgba(255,255,255,.10);
+  background:rgba(255,255,255,.03);
+  border-radius:24px;
+  padding:18px;
+  overflow:hidden;
+}
+@media (min-width:640px){
+  .resultHeroX{ padding:22px; }
+}
+
+.resultHeroXBadge{
+  display:inline-flex;
+  align-items:center;
+  gap:10px;
+  border:1px solid rgba(255,255,255,.12);
+  background:rgba(0,0,0,.22);
+  padding:8px 12px;
+  border-radius:999px;
+  font-size:12px;
+  color:rgba(255,255,255,.78);
+  user-select:none;
+  cursor:default;
+}
+.resultHeroXDot{
+  width:5px;height:5px;border-radius:999px;
+  background:rgba(255,255,255,.40);
+  display:inline-block;
+}
+
+.resultHeroXTag{
+  border:1px solid rgba(255,255,255,.14);
+  background:rgba(255,255,255,.05);
+  color:rgba(255,255,255,.86);
+  border-radius:999px;
+  padding:8px 10px;
+  font-size:12px;
+  user-select:none;
+  cursor:default;
+}
+.resultHeroXTag.subtle{
+  color:rgba(255,255,255,.62);
+  border-color:rgba(255,255,255,.10);
+  background:rgba(255,255,255,.03);
+}
+
+.resultHeroXTitle{
+  font-size:34px;
+  line-height:1.08;
+  letter-spacing:-.02em;
+  font-weight:650;
+}
+@media(min-width:640px){
+  .resultHeroXTitle{ font-size:44px; }
+}
+
+.resultHeroXSub{
+  margin-top:10px;
+  font-size:14px;
+  line-height:1.65;
+  color:rgba(255,255,255,.70);
+  max-width:62ch;
+}
+
+.resultHeroXCtas{
+  margin-top:14px;
+  display:flex;
+  flex-wrap:wrap;
+  gap:10px;
+}
+
+.resultHeroXPrimary{
+  height:48px;
+  padding:0 16px;
+  border-radius:16px;
+  background:#fff;
+  color:#000;
+  font-size:14px;
+  font-weight:650;
+  letter-spacing:.01em;
+  transition:transform .15s ease, background .2s ease;
+  box-shadow:0 18px 56px rgba(255,255,255,.14);
+}
+.resultHeroXPrimary:active{ transform:scale(.99); }
+.resultHeroXPrimary:hover{ background:rgba(255,255,255,.92); }
+
+.resultHeroXSecondary{
+  height:48px;
+  padding:0 16px;
+  border-radius:16px;
+  border:1px solid rgba(255,255,255,.16);
+  background:rgba(255,255,255,.03);
+  color:rgba(255,255,255,.82);
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  font-size:14px;
+  transition:background .2s ease, border-color .2s ease, transform .15s ease;
+}
+.resultHeroXSecondary:hover{ background:rgba(255,255,255,.06); border-color:rgba(255,255,255,.22); }
+.resultHeroXSecondary:active{ transform:scale(.99); }
+
+.resultHeroXProof{
+  margin-top:14px;
+  display:flex;
+  flex-wrap:wrap;
+  gap:10px;
+  color:rgba(255,255,255,.55);
+  font-size:12px;
+  user-select:none;
+  cursor:default;
+}
+.resultHeroXProofItem{ color:rgba(255,255,255,.62); }
+.resultHeroXProofSep{ color:rgba(255,255,255,.25); }
+
+/* CARD PALETTE */
+.resultCardX{
+  border:1px solid rgba(255,255,255,.10);
+  background:rgba(255,255,255,.03);
+  border-radius:24px;
+  padding:18px;
+}
+@media (min-width:640px){
+  .resultCardX{ padding:22px; }
+}
+
+.resultCardXTop{
+  display:flex;
+  gap:14px;
+  align-items:flex-start;
+  justify-content:space-between;
+}
+.resultCardXTitle{
+  font-size:15px;
+  font-weight:650;
+  color:rgba(255,255,255,.92);
+}
+.resultCardXHint{
+  margin-top:4px;
+  font-size:13px;
+  color:rgba(255,255,255,.60);
+  line-height:1.5;
+  max-width:60ch;
+}
+.resultCardXCta{
+  height:40px;
+  padding:0 12px;
+  border-radius:999px;
+  background:rgba(255,255,255,.06);
+  border:1px solid rgba(255,255,255,.14);
+  color:rgba(255,255,255,.82);
+  font-size:12px;
+  font-weight:600;
+  transition:background .2s ease, border-color .2s ease, transform .15s ease;
+  user-select:none;
+}
+.resultCardXCta:hover{ background:rgba(255,255,255,.08); border-color:rgba(255,255,255,.22); }
+.resultCardXCta:active{ transform:scale(.99); }
+
+/* swatches */
+.resultSwatchesX{
+  margin-top:14px;
+  display:grid;
+  gap:10px;
+  grid-template-columns:1fr;
+}
+@media(min-width:640px){
+  .resultSwatchesX{ grid-template-columns:1fr 1fr; }
+}
+.resultSwatchX{
+  display:flex;
+  align-items:center;
+  gap:12px;
+  border:1px solid rgba(255,255,255,.10);
+  background:rgba(0,0,0,.18);
+  border-radius:18px;
+  padding:12px;
+}
+.resultSwatchXColor{
+  width:46px;height:46px;border-radius:16px;
+  border:1px solid rgba(255,255,255,.12);
+  box-shadow:0 10px 28px rgba(0,0,0,.35);
+}
+.resultSwatchXMeta{
+  display:flex;
+  flex-direction:column;
+  gap:2px;
+}
+.resultSwatchXName{
+  font-size:13px;
+  font-weight:650;
+  color:rgba(255,255,255,.90);
+}
+.resultSwatchXHex{
+  font-size:12px;
+  color:rgba(255,255,255,.55);
+  font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+}
+
+/* WHY */
+.resultWhyX{
+  margin-top:14px;
+  padding-top:14px;
+  border-top:1px solid rgba(255,255,255,.08);
+}
+.resultWhyXTitle{
+  font-size:13px;
+  font-weight:650;
+  color:rgba(255,255,255,.86);
+}
+.resultWhyXGrid{
+  margin-top:10px;
+  display:grid;
+  gap:10px;
+  grid-template-columns:1fr;
+}
+@media(min-width:640px){
+  .resultWhyXGrid{ grid-template-columns:1fr 1fr 1fr; }
+}
+.resultWhyXItem{
+  border:1px solid rgba(255,255,255,.08);
+  background:rgba(255,255,255,.02);
+  border-radius:18px;
+  padding:12px;
+}
+.resultWhyXStrong{
+  font-size:13px;
+  font-weight:650;
+  color:rgba(255,255,255,.88);
+}
+.resultWhyXText{
+  margin-top:4px;
+  font-size:12px;
+  line-height:1.55;
+  color:rgba(255,255,255,.62);
+}
+
+/* SECTION */
+.resultSectionX{
+  margin-top:22px;
+}
+.resultSectionXHead{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:12px;
+}
+.resultSectionXTitle{
+  font-size:15px;
+  font-weight:650;
+  color:rgba(255,255,255,.92);
+}
+.resultSectionXSub{
+  margin-top:3px;
+  font-size:13px;
+  color:rgba(255,255,255,.60);
+}
+.resultMiniCtaX{
+  height:36px;
+  padding:0 12px;
+  border-radius:999px;
+  border:1px solid rgba(255,255,255,.14);
+  background:rgba(255,255,255,.04);
+  color:rgba(255,255,255,.82);
+  font-size:12px;
+  font-weight:600;
+  transition:background .2s ease, transform .15s ease, border-color .2s ease;
+  user-select:none;
+}
+.resultMiniCtaX:hover{ background:rgba(255,255,255,.07); border-color:rgba(255,255,255,.22); }
+.resultMiniCtaX:active{ transform:scale(.99); }
+
+.resultSectionXCard{
+  margin-top:12px;
+  border:1px solid rgba(255,255,255,.10);
+  background:rgba(255,255,255,.03);
+  border-radius:24px;
+  padding:12px;
+}
+
+.resultBigShopCtaX{
+  margin-top:12px;
+  width:100%;
+  height:52px;
+  border-radius:18px;
+  background:#fff;
+  color:#000;
+  font-weight:650;
+  letter-spacing:.01em;
+  transition:transform .15s ease, background .2s ease;
+  box-shadow:0 18px 56px rgba(255,255,255,.12);
+}
+.resultBigShopCtaX:hover{ background:rgba(255,255,255,.92); }
+.resultBigShopCtaX:active{ transform:scale(.99); }
+
+/* Sticky */
+.resultStickyX{
+  position:fixed;
+  left:0; right:0; bottom:0;
+  padding:16px 0 calc(env(safe-area-inset-bottom) + 16px);
+  background:linear-gradient(to top, rgba(0,0,0,.92), rgba(0,0,0,0));
+  z-index:60;
+}
+.resultGhostBtnX{
+  height:46px;
+  padding:0 14px;
+  border-radius:16px;
+  border:1px solid rgba(255,255,255,.14);
+  background:rgba(255,255,255,.03);
+  color:rgba(255,255,255,.82);
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  transition:background .2s ease, border-color .2s ease, transform .15s ease;
+}
+.resultGhostBtnX:hover{ background:rgba(255,255,255,.06); border-color:rgba(255,255,255,.22); }
+.resultGhostBtnX:active{ transform:scale(.99); }
+
+.resultStickyBtnX{
+  height:46px;
+  padding:0 16px;
+  border-radius:16px;
+  background:#fff;
+  color:#000;
+  font-weight:650;
+  transition:transform .15s ease, background .2s ease;
+  box-shadow:0 16px 48px rgba(255,255,255,.12);
+}
+.resultStickyBtnX:hover{ background:rgba(255,255,255,.92); }
+.resultStickyBtnX:active{ transform:scale(.99); }

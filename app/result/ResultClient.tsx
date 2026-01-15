@@ -22,38 +22,59 @@ const SHOP_URL = "https://shop.beorganich-example.com";
 const SHARE_BASE_URL = "https://beorganich-example.vercel.app";
 const LAST_KEY = "beorganich:lastPalette:v1";
 
-// ✅ Safe su Vercel/build: localStorage solo in browser
+// fallback RAM (in caso localStorage non leggibile)
+let MEMORY_LAST: PaletteItem[] | null = null;
+
 function loadLastPalette(): PaletteItem[] | null {
-  if (typeof window === "undefined") return null;
-
+  if (MEMORY_LAST?.length) return MEMORY_LAST;
   try {
-    const raw = window.localStorage.getItem(LAST_KEY);
+    const raw = localStorage.getItem(LAST_KEY);
     if (!raw) return null;
-
     const parsed = JSON.parse(raw);
     if (!parsed?.palette?.length) return null;
-
-    return parsed.palette as PaletteItem[];
+    MEMORY_LAST = parsed.palette as PaletteItem[];
+    return MEMORY_LAST;
   } catch {
     return null;
   }
 }
 
-// micro helper
 function cx(...parts: Array<string | false | undefined | null>) {
   return parts.filter(Boolean).join(" ");
 }
 
-export default function ResultClient() {
-  const [palette, setPalette] = useState<PaletteItem[] | null>(null);
+function confidenceCopy(conf?: number) {
+  if (typeof conf !== "number") return "Analisi completata";
+  if (conf >= 86) return "Analisi molto stabile";
+  if (conf >= 72) return "Analisi stabile";
+  if (conf >= 58) return "Analisi buona";
+  return "Analisi ok";
+}
 
-  // ✅ quando ScanClient fa /result?ts=..., qui cambia e ricarichiamo
+export default function ResultPage() {
+  const [palette, setPalette] = useState<PaletteItem[] | null>(null);
+  const [meta, setMeta] = useState<any | null>(null);
+
   const searchParams = useSearchParams();
   const ts = searchParams.get("ts");
 
   useEffect(() => {
-    const last = loadLastPalette();
-    setPalette(last);
+    try {
+      const raw = localStorage.getItem(LAST_KEY);
+      if (!raw) {
+        const last = loadLastPalette();
+        setPalette(last);
+        setMeta(null);
+        return;
+      }
+      const parsed = JSON.parse(raw);
+      setPalette(parsed?.palette?.length ? (parsed.palette as PaletteItem[]) : null);
+      setMeta(parsed?.meta ?? null);
+    } catch {
+      const last = loadLastPalette();
+      setPalette(last);
+      setMeta(null);
+    }
   }, [ts]);
 
   const shareUrl = useMemo(
@@ -67,7 +88,6 @@ export default function ResultClient() {
   );
 
   const onOpenShop = useCallback(() => {
-    if (typeof window === "undefined") return;
     window.open(shopDeepLink || SHOP_URL, "_blank", "noreferrer");
   }, [shopDeepLink]);
 
@@ -76,6 +96,9 @@ export default function ResultClient() {
     [palette]
   );
   const insight = useMemo(() => getStyleInsight(style), [style]);
+
+  const conf = typeof meta?.confidence === "number" ? meta.confidence : undefined;
+  const method = meta?.method === "camera" ? "scan" : meta?.method === "upload" ? "foto" : null;
 
   if (!palette) {
     return (
@@ -90,9 +113,7 @@ export default function ResultClient() {
         <main className="mx-auto max-w-5xl px-5 pb-28 pt-16">
           <div className="card">
             <div className="cardTitle">Nessun risultato disponibile</div>
-            <div className="cardText">
-              Fai uno scan o carica una foto per generare la tua palette.
-            </div>
+            <div className="cardText">Fai uno scan o carica una foto per generare la tua palette.</div>
 
             <div className="mt-5 grid gap-3 sm:grid-cols-2">
               <Link
@@ -116,14 +137,15 @@ export default function ResultClient() {
 
   return (
     <div className="min-h-dvh bg-black text-white">
+      {/* Background premium */}
       <div className="beoAurora" aria-hidden />
       <div className="beoNoise" aria-hidden />
 
+      {/* HEADER */}
       <header className="mx-auto flex max-w-5xl items-center justify-between px-5 pt-6 relative z-10">
         <div className="flex items-center gap-3">
           <div className="text-[12px] tracking-[0.22em] text-white/70">{BRAND}</div>
-          <div className="pill">Risultato</div>
-          <div className="pill subtle">✓ salvato</div>
+          <div className="resultTopChip">RISULTATO</div>
         </div>
 
         <div className="flex items-center gap-2">
@@ -136,117 +158,146 @@ export default function ResultClient() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-5xl px-5 pb-[calc(env(safe-area-inset-bottom)+120px)] pt-10 relative z-10">
-        <section className="beoEnter">
-          <div className="resultHero2">
-            <div className="resultHeroBadge">
-              Analisi completata <span className="resultHeroDot" aria-hidden />
-              Palette pronta
-            </div>
+      <main className="mx-auto max-w-5xl px-5 pb-[calc(env(safe-area-inset-bottom)+140px)] pt-10 relative z-10">
+        {/* HERO – conversion */}
+        <section className="resultHeroX">
+          <div className="resultHeroXBadge">
+            {confidenceCopy(conf)}
+            <span className="resultHeroXDot" aria-hidden />
+            {method ? `da ${method}` : "pronto"}
+          </div>
 
-            <div className="mt-4 inline-flex items-center gap-2">
-              <span className="pill">{insight.displayName}</span>
-              <span className="pill subtle">stile dominante</span>
-            </div>
+          <div className="mt-4 inline-flex items-center gap-2">
+            <span className="resultHeroXTag">{insight.displayName}</span>
+            <span className="resultHeroXTag subtle">stile dominante</span>
+          </div>
 
-            <h1 className="resultHeroTitle2 mt-4">{insight.title}</h1>
+          <h1 className="resultHeroXTitle mt-4">{insight.title}</h1>
 
-            <p className="resultHeroSub2">
-              {insight.subtitle}{" "}
-              <span className="text-white/85 font-medium">{insight.hook}</span>
-            </p>
+          <p className="resultHeroXSub">
+            {insight.subtitle}{" "}
+            <span className="text-white/90 font-medium">{insight.hook}</span>
+          </p>
 
-            <div className="resultHeroCtas">
-              <button onClick={onOpenShop} className="resultHeroPrimary">
-                {insight.cta}
-              </button>
+          <div className="resultHeroXCtas">
+            <button onClick={onOpenShop} className="resultHeroXPrimary">
+              Vedi i capi perfetti →
+            </button>
 
-              <Link href="/scan" className="resultHeroSecondary">
-                Rifai scan
-              </Link>
-            </div>
+            <Link href="/scan" className="resultHeroXSecondary">
+              Rifai scan
+            </Link>
+          </div>
+
+          <div className="resultHeroXProof">
+            <div className="resultHeroXProofItem">Palette personale</div>
+            <span className="resultHeroXProofSep">•</span>
+            <div className="resultHeroXProofItem">Selezione capi coerente</div>
+            <span className="resultHeroXProofSep">•</span>
+            <div className="resultHeroXProofItem">Nessuna foto salvata</div>
           </div>
         </section>
 
+        {/* PALETTE – ultra clean */}
         <section className="mt-7">
-          <div className="resultCard2">
-            <div className="resultCardTop2">
+          <div className="resultCardX">
+            <div className="resultCardXTop">
               <div>
-                <div className="resultCardTitle2">La tua palette personale</div>
-                <div className="resultCardHint2">
-                  Regola semplice: quando sei indeciso, scegli un colore dentro questa lista.
+                <div className="resultCardXTitle">La tua palette personale</div>
+                <div className="resultCardXHint">
+                  Regola d’oro: se sei indeciso, scegli un colore qui dentro.
                 </div>
               </div>
 
-              <button onClick={onOpenShop} className="resultPrimaryCta2">
-                Vedi i capi →
+              <button onClick={onOpenShop} className="resultCardXCta">
+                Vai allo shop →
               </button>
             </div>
 
-            <div className="resultSwatches2">
+            <div className="resultSwatchesX">
               {palette.map((p) => (
-                <div key={`${p.hex}-${p.id ?? ""}`} className="resultSwatch2">
-                  <div className="resultSwatchColor2" style={{ background: p.hex }} />
-                  <div className="resultSwatchMeta2">
-                    <div className="resultSwatchName2">{p.name}</div>
-                    <div className="resultSwatchHex2">{p.hex.toUpperCase()}</div>
+                <div key={`${p.hex}-${p.id ?? ""}`} className="resultSwatchX">
+                  <div className="resultSwatchXColor" style={{ background: p.hex }} />
+                  <div className="resultSwatchXMeta">
+                    <div className="resultSwatchXName">{p.name}</div>
+                    <div className="resultSwatchXHex">{p.hex.toUpperCase()}</div>
                   </div>
                 </div>
               ))}
             </div>
+
+            {/* micro conversion copy */}
+            <div className="resultWhyX">
+              <div className="resultWhyXTitle">Perché questi colori ti valorizzano</div>
+              <div className="resultWhyXGrid">
+                <div className="resultWhyXItem">
+                  <div className="resultWhyXStrong">Più luminosità</div>
+                  <div className="resultWhyXText">Toni che non “spengono” la pelle: viso più pulito, più vivo.</div>
+                </div>
+                <div className="resultWhyXItem">
+                  <div className="resultWhyXStrong">Contrasto giusto</div>
+                  <div className="resultWhyXText">Eviti colori che ti induriscono o ti rendono “grigio”.</div>
+                </div>
+                <div className="resultWhyXItem">
+                  <div className="resultWhyXStrong">Scelta facile</div>
+                  <div className="resultWhyXText">Meno dubbi quando compri: prendi capi già coerenti.</div>
+                </div>
+              </div>
+            </div>
           </div>
         </section>
 
-        <section className="resultSection2">
-          <div className="resultSectionHead2">
+        {/* PRODUCTS – shop-first */}
+        <section className="resultSectionX">
+          <div className="resultSectionXHead">
             <div>
-              <div className="resultSectionTitle2">Capi selezionati per la tua palette</div>
-              <div className="resultSectionSub2">Selezione coerente con i tuoi toni naturali.</div>
+              <div className="resultSectionXTitle">Capi selezionati per la tua palette</div>
+              <div className="resultSectionXSub">Apri lo shop con i filtri già pronti.</div>
             </div>
 
-            <button onClick={onOpenShop} className="resultMiniCta2">
+            <button onClick={onOpenShop} className="resultMiniCtaX">
               Apri shop →
             </button>
           </div>
 
-          <div className="resultSectionCard2">
+          <div className="resultSectionXCard">
             <ProductCarousel palette={palette} shopUrl={SHOP_URL} />
           </div>
 
-          <button onClick={onOpenShop} className="resultBigShopCta2">
+          <button onClick={onOpenShop} className="resultBigShopCtaX">
             Vai ai capi consigliati →
           </button>
         </section>
 
-        <section className="resultSection2">
-          <div className="resultSectionHead2">
+        {/* SAVE + SHARE */}
+        <section className="resultSectionX">
+          <div className="resultSectionXHead">
             <div>
-              <div className="resultSectionTitle2">Salva e condividi</div>
-              <div className="resultSectionSub2">
-                Tieni il risultato a portata di mano e ricevi nuove uscite coerenti.
-              </div>
+              <div className="resultSectionXTitle">Salva e condividi</div>
+              <div className="resultSectionXSub">Tienila a portata di mano. (Zero foto salvate.)</div>
             </div>
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2">
-            <div className="resultSectionCard2">
+            <div className="resultSectionXCard">
               <SharePalette palette={palette} shareUrl={shareUrl} title={`${BRAND} — Palette`} />
             </div>
-            <div className="resultSectionCard2">
+            <div className="resultSectionXCard">
               <EmailGate palette={palette} />
             </div>
           </div>
         </section>
       </main>
 
-      <div className="resultSticky2">
+      {/* STICKY – conversion */}
+      <div className="resultStickyX">
         <div className="mx-auto flex max-w-5xl items-center justify-between gap-3 px-5">
-          <Link href="/scan" className="resultGhostBtn2">
+          <Link href="/scan" className="resultGhostBtnX">
             Rifai scan
           </Link>
 
-          <button onClick={onOpenShop} className={cx("resultStickyBtn2")}>
-            {insight.cta}
+          <button onClick={onOpenShop} className={cx("resultStickyBtnX")}>
+            Vedi i capi perfetti →
           </button>
         </div>
       </div>
