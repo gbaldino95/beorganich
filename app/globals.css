@@ -112,7 +112,20 @@ body {
   color: rgba(255,255,255,0.60);
   border-color: rgba(255,255,255,0.10);
 }
+/* HOME: preview compatta (premium, zero vuoto) */
+.cameraShellCompact {
+  height: auto !important;
+  min-height: 0 !important;
+  aspect-ratio: auto !important;
+  padding-bottom: 0 !important;
+}
 
+/* Se cameraShell usa pseudo-elementi per mantenere ratio (tipo ::before con padding-bottom) */
+.cameraShellCompact::before,
+.cameraShellCompact::after {
+  content: none !important;
+  display: none !important;
+}
 .pillButton {
   display: inline-flex;
   align-items: center;
@@ -194,11 +207,10 @@ body {
 /* Camera shell */
 .cameraShell {
   position: relative;
+  height: auto;
+  min-height: 0;
+  border-radius: 24px;
   overflow: hidden;
-  border-radius: 28px;
-  border: 1px solid rgba(255,255,255,0.10);
-  background: radial-gradient(1200px 600px at 50% 0%, rgba(255,255,255,0.08), rgba(0,0,0,0.75));
-  min-height: 460px;
 }
 
 @media (max-width: 420px) {
@@ -2068,4 +2080,45 @@ input, button, select, textarea {
 .beoPCNote {
   font-size: 11px;
   color: rgba(255,255,255,0.45);
+}
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.14);
+  background: rgba(255,255,255,0.06);
+  color: rgba(255,255,255,0.70);
+  font-size: 13px;
+  line-height: 1;
+  user-select: none;
+  pointer-events: none; /* ✅ non cliccabile */
+}
+
+.badgeDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.45);
+}
+/* --- WOW micro animations (lightweight) --- */
+@keyframes beoPop {
+  0% { transform: translateY(8px) scale(.98); opacity: 0; }
+  100% { transform: translateY(0) scale(1); opacity: 1; }
+}
+
+@keyframes beoGlowPulse {
+  0% { filter: blur(34px); opacity: .22; transform: scale(.98); }
+  100% { filter: blur(42px); opacity: .36; transform: scale(1.02); }
+}
+
+.beoHeroIn { animation: beoPop .55s ease-out both; }
+.beoGlowPulse { animation: beoGlowPulse 2.6s ease-in-out infinite alternate; }
+/* HOME: versione compatta della preview (taglia lo spazio vuoto) */
+.cameraShellCompact {
+  height: auto !important;
+  min-height: 0 !important;
+  aspect-ratio: auto !important;
+  padding-bottom: 0 !important;
 }

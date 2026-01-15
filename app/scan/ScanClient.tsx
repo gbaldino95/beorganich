@@ -23,7 +23,19 @@ declare global {
     ttq?: any;
   }
 }
+function explainCamError(err: any) {
+  const name = String(err?.name || "");
+  const msg = String(err?.message || "");
 
+  console.error("getUserMedia ERROR:", { name, msg, err });
+
+  if (name === "NotAllowedError" || name === "SecurityError") return "NOT_ALLOWED";
+  if (name === "NotFoundError") return "NO_CAMERA";
+  if (name === "NotReadableError") return "BUSY";
+  if (name === "OverconstrainedError") return "CONSTRAINTS";
+
+  return `RAW:${name}:${msg}`;
+}
 function track(event: string, data: Record<string, any> = {}) {
   if (typeof window !== "undefined" && window.ttq) {
     window.ttq.track(event, data);
@@ -616,6 +628,21 @@ export default function ScanPage() {
 
   // ✅ soglia 65%
   const THRESHOLD = 0.65;
+  function explainCamError(err: any) {
+  const name = String(err?.name || "");
+  const msg = String(err?.message || "");
+
+  // log completo
+  console.error("getUserMedia ERROR:", { name, msg, err });
+
+  if (name === "NotAllowedError" || name === "SecurityError") return "NOT_ALLOWED";
+  if (name === "NotFoundError") return "NO_CAMERA";
+  if (name === "NotReadableError") return "BUSY";
+  if (name === "OverconstrainedError") return "CONSTRAINTS";
+
+  // fallback: mostra il raw
+  return `RAW:${name}:${msg}`;
+}
 
   useEffect(() => {
     (async () => {
@@ -655,10 +682,19 @@ export default function ScanPage() {
     trackEvent("StartScan", { method: "camera" }, "/scan");
     setScanFull(false);
     stopCamera();
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: "user", width: { ideal: 1280 }, height: { ideal: 720 } },
-      audio: false,
-    });
+     const isMobile =
+  /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+
+let stream: MediaStream;
+
+try {
+  stream = await navigator.mediaDevices.getUserMedia({
+    video: { facingMode: "user" },
+    audio: false,
+  });
+} catch (err) {
+  throw new Error(explainCamError(err));
+}
     streamRef.current = stream;
     const v = videoRef.current;
     if (!v) throw new Error("Video ref missing");
@@ -853,10 +889,28 @@ trackEvent(
 
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
       rafRef.current = requestAnimationFrame(runTick);
-    } catch {
-      setLastFailReason("Permesso camera negato o non disponibile. Puoi caricare una foto.");
-      setRitual("error");
-    }
+    } catch (e: any) {
+  const code = String(e?.message || "");
+
+  if (code.startsWith("RAW:")) {
+    // RAW:<name>:<message>
+    const raw = code.slice(4);
+    setLastFailReason(`Errore camera: ${raw}`);
+    setRitual("error");
+    return;
+  }
+
+  const map: Record<string, string> = {
+    NOT_ALLOWED: "Permesso camera negato. Clicca 🔒 nella barra e abilita la camera.",
+    NO_CAMERA: "Nessuna camera trovata su questo dispositivo.",
+    BUSY: "La camera è in uso da un’altra app/tab (Zoom/Meet/Teams). Chiudi e riprova.",
+    CONSTRAINTS: "Impostazioni camera non supportate. Ricarica la pagina.",
+    CAMERA_GENERIC: "Non riesco ad aprire la camera. Ricarica o usa ‘Carica una foto’.",
+  };
+
+  setLastFailReason(map[code] ?? "Non riesco ad aprire la camera. Ricarica o carica una foto.");
+  setRitual("error");
+}
   }, [runTick, startCamera]);
 
   const onPickPhoto = useCallback(() => {
