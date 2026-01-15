@@ -3,7 +3,7 @@
 import React, { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import StatusPill from "./components/StatusPill";
+import StatusPill from "@/app/components/StatusPill"; // <-- se rosso, dimmi dove sta esattamente StatusPill.tsx
 
 type CamStatus = "idle" | "checking" | "ready" | "locked";
 
@@ -34,10 +34,11 @@ export default function HomePage() {
 
     const onMove = (e: PointerEvent) => {
       const rect = el.getBoundingClientRect();
-      const x = (e.clientX - rect.left) / rect.width; // 0..1
-      const y = (e.clientY - rect.top) / rect.height; // 0..1
-      const rx = (0.5 - y) * 5; // deg
-      const ry = (x - 0.5) * 7; // deg
+      const x = (e.clientX - rect.left) / rect.width;
+      const y = (e.clientY - rect.top) / rect.height;
+
+      const rx = (0.5 - y) * 5;
+      const ry = (x - 0.5) * 7;
 
       if (raf) cancelAnimationFrame(raf);
       raf = requestAnimationFrame(() => {
@@ -151,7 +152,7 @@ export default function HomePage() {
           </div>
         </Link>
 
-        {/* SOLO SHOP (come mi hai chiesto) */}
+        {/* SOLO SHOP */}
         <Link
           href="/shop"
           className="
@@ -166,20 +167,20 @@ export default function HomePage() {
       </header>
 
       {/* MAIN */}
-      <main className="mx-auto max-w-6xl px-4 sm:px-6 pb-28 pt-10 sm:pt-14">
+      <main className="mx-auto max-w-6xl px-4 sm:px-6 pb-44 lg:pb-24 pt-10 sm:pt-14">
         <div className="grid gap-10 lg:grid-cols-2 lg:items-start">
-          {/* LEFT – COPY (Stripe-like: corto, forte, ordinato) */}
+          {/* LEFT */}
           <section className="space-y-6">
-            <div className="inline-flex items-center gap-2">
-              <span className="stripeEyebrow">PERSONAL COLOR</span>
-              <span className="stripeDot" aria-hidden />
-              <span className="stripeEyebrow text-white/55">ON-DEVICE</span>
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] tracking-[0.22em] text-white/70">PERSONAL COLOR</span>
+              <span className="h-[3px] w-[3px] rounded-full bg-white/35" aria-hidden />
+              <span className="text-[11px] tracking-[0.22em] text-white/45">ON-DEVICE</span>
             </div>
 
             <h1 className="text-balance text-4xl font-semibold tracking-tight sm:text-5xl lg:text-6xl">
               I colori che ti stanno bene.
               <br />
-              <span className="text-white/85">Selezionati in 5 secondi.</span>
+              <span className="text-white/80">Selezionati in 5 secondi.</span>
             </h1>
 
             <p className="max-w-xl text-pretty text-[15px] sm:text-[16px] leading-7 text-white/70">
@@ -188,42 +189,48 @@ export default function HomePage() {
               Più sicurezza quando compri. Meno resi. Più “wow”.
             </p>
 
-            <div className="stripeCard">
-              <div className="stripeCardTitle">Perché funziona</div>
-              <ul className="stripeList">
-                <li>
-                  <span className="stripeBullet" aria-hidden />
+            <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-5 sm:p-6">
+              <div className="text-[14px] font-semibold text-white/90">Perché funziona</div>
+
+              <ul className="mt-3 grid gap-2 text-[13px] leading-6 text-white/70">
+                <li className="flex gap-3">
+                  <span className="mt-[9px] h-[5px] w-[5px] rounded-full bg-white/35" aria-hidden />
                   <span>
                     Evidenzia i colori che <span className="text-white/90 font-medium">ti illuminano</span>
                   </span>
                 </li>
-                <li>
-                  <span className="stripeBullet" aria-hidden />
+                <li className="flex gap-3">
+                  <span className="mt-[9px] h-[5px] w-[5px] rounded-full bg-white/35" aria-hidden />
                   <span>
                     Ti guida su capi già <span className="text-white/90 font-medium">coerenti con la palette</span>
                   </span>
                 </li>
-                <li>
-                  <span className="stripeBullet" aria-hidden />
+                <li className="flex gap-3">
+                  <span className="mt-[9px] h-[5px] w-[5px] rounded-full bg-white/35" aria-hidden />
                   <span>
                     Nessuna foto salvata: <span className="text-white/90 font-medium">calcolo sul dispositivo</span>
                   </span>
                 </li>
               </ul>
 
-              {/* “Pills” che NON sembrano cliccabili */}
-              <div className="stripeBadges" aria-label="vantaggi">
-                <span className="stripeBadge">Risultato immediato</span>
-                <span className="stripeBadge">Nessun salvataggio</span>
-                <span className="stripeBadge">Mobile-first</span>
+              {/* badges NON cliccabili */}
+              <div className="mt-4 flex flex-wrap gap-2">
+                {["Risultato immediato", "Nessun salvataggio", "Mobile-first"].map((t) => (
+                  <span
+                    key={t}
+                    className="cursor-default select-none rounded-full border border-white/10 bg-white/[0.03] px-3 py-1 text-[12px] text-white/70"
+                  >
+                    {t}
+                  </span>
+                ))}
               </div>
             </div>
           </section>
 
-          {/* RIGHT – CTA subito + preview compatta (zero spazio vuoto) */}
+          {/* RIGHT */}
           <section className="space-y-4">
-            {/* CTA top */}
-            <div className="grid gap-3">
+            {/* CTA desktop/tablet ONLY (su mobile c'è lo sticky) */}
+            <div className="hidden lg:grid gap-3">
               <Link
                 href="/scan"
                 className="
@@ -256,26 +263,32 @@ export default function HomePage() {
                 Oppure carica una foto
               </Link>
 
-              <div className="stripeMiniProof">
-                <div className="stripeMiniProofTop">
-                  <div className="text-[13px] text-white/90 font-medium">Il risultato migliore</div>
-                  <div className="text-[12px] text-white/55">luce naturale · volto frontale · niente filtri</div>
+              <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-4">
+                <div className="text-[13px] text-white/90 font-medium">Il risultato migliore</div>
+                <div className="mt-1 text-[12px] leading-6 text-white/55">
+                  luce naturale · volto frontale · niente filtri
                 </div>
-                <div className="stripeMiniProofBadges">
-                  <span className="stripeBadge">Privacy-first</span>
-                  <span className="stripeBadge">Palette + capi</span>
-                  <span className="stripeBadge">0 upload auto</span>
+
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {["Privacy-first", "Palette + capi", "0 upload auto"].map((t) => (
+                    <span
+                      key={t}
+                      className="cursor-default select-none rounded-full border border-white/10 bg-white/[0.03] px-3 py-1 text-[12px] text-white/70"
+                    >
+                      {t}
+                    </span>
+                  ))}
                 </div>
               </div>
             </div>
 
-            {/* Preview (tagliata: solo titolo + palette, NO spazio vuoto) */}
+            {/* PREVIEW — compatta, senza spazio vuoto */}
             <div className="relative">
               <div className="beoAurora" aria-hidden />
 
               <div
                 ref={tiltRef}
-                className="stripePreviewShell"
+                className="relative overflow-hidden rounded-3xl border border-white/10 bg-white/[0.03]"
                 style={{
                   ...tiltStyle,
                   transition: tiltEnabled ? "transform 140ms ease" : undefined,
@@ -284,49 +297,53 @@ export default function HomePage() {
               >
                 <div className="beoNoise" aria-hidden />
 
-                {/* TOP */}
-                <div className="stripePreviewTop">
+                {/* Header preview: pulito (niente “risultato reale” a caso) */}
+                <div className="flex items-start justify-between gap-4 px-5 pt-5">
                   <div>
-                    <div className="stripePreviewTitle">Esempio palette</div>
-                    <div className="stripePreviewSub">Scorrevole · preview</div>
+                    <div className="text-[14px] font-semibold text-white/90">Palette preview</div>
+                    <div className="mt-1 text-[12px] text-white/55">Esempio scorrevole</div>
                   </div>
-                  <span className="stripeBadge">Preview</span>
+
+                  <span className="cursor-default select-none rounded-full border border-white/10 bg-white/[0.03] px-3 py-1 text-[12px] text-white/70">
+                    Live demo
+                  </span>
                 </div>
 
-                {/* MARQUEE */}
-                <div className="overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03]">
-                  <div className="beoMarquee flex gap-3 p-4">
-                    {marquee.map((c, idx) => (
-                      <div
-                        key={`${c.hex}-${idx}`}
-                        className="min-w-[210px] sm:min-w-[240px] flex items-center gap-3 rounded-2xl border border-white/10 bg-black/20 px-3 py-3"
-                      >
-                        <div className="relative">
-                          <div className="h-12 w-12 rounded-2xl border border-white/10" style={{ background: c.hex }} />
-                          <div
-                            className="absolute -inset-2 rounded-[18px] opacity-30 blur-lg"
-                            style={{ background: c.hex }}
-                            aria-hidden
-                          />
-                        </div>
+                {/* Marquee */}
+                <div className="px-5 pb-4 pt-4">
+                  <div className="overflow-hidden rounded-2xl border border-white/10 bg-black/20">
+                    <div className="beoMarquee flex gap-3 p-4">
+                      {marquee.map((c, idx) => (
+                        <div
+                          key={`${c.hex}-${idx}`}
+                          className="min-w-[210px] sm:min-w-[240px] flex items-center gap-3 rounded-2xl border border-white/10 bg-black/20 px-3 py-3"
+                        >
+                          <div className="relative">
+                            <div className="h-12 w-12 rounded-2xl border border-white/10" style={{ background: c.hex }} />
+                            <div
+                              className="absolute -inset-2 rounded-[18px] opacity-30 blur-lg"
+                              style={{ background: c.hex }}
+                              aria-hidden
+                            />
+                          </div>
 
-                        <div className="flex flex-col">
-                          <div className="text-[13px] font-semibold text-white/90">{c.name}</div>
-                          <div className="text-[12px] text-white/55 font-mono">{c.hex}</div>
+                          <div className="flex flex-col">
+                            <div className="text-[13px] font-semibold text-white/90">{c.name}</div>
+                            <div className="text-[12px] text-white/55 font-mono">{c.hex}</div>
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      ))}
+                    </div>
                   </div>
-                </div>
 
-                {/* Bottom note */}
-                <div className="stripePreviewNote">
-                  Dopo lo scan: palette + capi consigliati + condivisione.
+                  <div className="mt-3 text-[12px] text-white/55">
+                    Dopo lo scan: palette + capi consigliati + condivisione.
+                  </div>
                 </div>
               </div>
             </div>
 
-            {/* camera status helper (solo testo, niente doppioni visivi) */}
+            {/* helper text leggero */}
             <div className="text-center text-[12px] text-white/45">
               {cameraStatus === "ready" && "Camera pronta: apri lo scan e fai il test."}
               {cameraStatus === "locked" && "Camera bloccata: Chrome → Impostazioni sito → Camera → Consenti."}
@@ -336,25 +353,41 @@ export default function HomePage() {
         </div>
       </main>
 
-      {/* STICKY CTA — mobile only (Stripe style: semplice) */}
-      <div className="fixed bottom-0 left-0 right-0 z-50 lg:hidden px-4 pb-[calc(env(safe-area-inset-bottom)+14px)] pt-3 bg-gradient-to-t from-black/90 to-transparent">
-        <div className="mx-auto max-w-md">
-          <Link
-            href="/scan"
-            className="
-              flex h-14 w-full items-center justify-center gap-2
-              rounded-2xl bg-white text-black
-              text-[15px] font-medium tracking-wide
-              active:scale-[0.99] transition
-              shadow-[0_12px_36px_rgba(255,255,255,0.18)]
-            "
-          >
-            Effettua lo scan
-            <span className="stripeBadge !bg-black/5 !text-black/80 !border-black/10">AI</span>
-          </Link>
+      {/* STICKY CTA — MOBILE ONLY (unico, niente barra bianca fantasma) */}
+      <div className="fixed bottom-0 left-0 right-0 z-50 lg:hidden">
+        <div className="pointer-events-none absolute inset-x-0 -top-10 h-10 bg-gradient-to-t from-black/90 to-transparent" />
 
-          <div className="mt-2 text-center text-[12px] text-white/60">
-            Analisi in pochi secondi · Nessuna foto salvata
+        <div className="px-4 pb-[calc(env(safe-area-inset-bottom)+14px)] pt-3 bg-black/80 backdrop-blur">
+          <div className="mx-auto max-w-md">
+            <Link
+              href="/scan"
+              className="
+                group relative flex h-14 w-full items-center justify-center gap-2
+                rounded-2xl bg-white text-black
+                text-[15px] font-semibold tracking-wide
+                active:scale-[0.99] transition
+                shadow-[0_12px_36px_rgba(255,255,255,0.18)]
+              "
+            >
+              Effettua lo scan
+              <span className="inline-flex items-center rounded-full border border-black/10 bg-black/5 px-2 py-[2px] text-[10px] font-semibold tracking-widest text-black/80">
+                AI
+              </span>
+
+              <span
+                className="
+                  pointer-events-none absolute inset-0
+                  -translate-x-full
+                  bg-gradient-to-r from-transparent via-black/5 to-transparent
+                  transition-transform duration-700
+                  group-hover:translate-x-full
+                "
+              />
+            </Link>
+
+            <div className="mt-2 text-center text-[12px] text-white/60">
+              5 secondi · Nessuna foto salvata
+            </div>
           </div>
         </div>
       </div>
