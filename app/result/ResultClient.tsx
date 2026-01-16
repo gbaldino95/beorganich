@@ -279,21 +279,27 @@ export default function ResultClient() {
               "Colori puliti, look ordinati: scegli in un attimo e compra senza ripensamenti."}
           </p>
 
-          <div className="mt-5 flex gap-3">
-            <Link
-              href="/shop"
-              className="relative z-10 flex h-14 flex-1 items-center justify-center rounded-2xl bg-white text-black text-[15px] font-semibold hover:bg-white/90 transition active:scale-[0.99]"
-            >
-              Vai allo shop →
-            </Link>
+          {/* Fashion authority close */}
+<div className="mt-6 text-center text-[14px] leading-6 text-white/80">
+  <div className="font-medium">Questa palette è la tua firma.</div>
+  <div className="text-white/55">Usala come riferimento, sempre.</div>
+</div>
 
-            <Link
-              href="/scan"
-              className="relative z-10 flex h-14 w-[42%] items-center justify-center rounded-2xl border border-white/15 bg-white/[0.02] text-white/85 hover:bg-white/[0.06] transition active:scale-[0.99]"
-            >
-              Rifai scan
-            </Link>
-          </div>
+{/* Primary CTA */}
+<Link
+  href="/shop"
+  className="mt-5 flex h-14 w-full items-center justify-center rounded-2xl bg-white text-black text-[15px] font-semibold tracking-wide transition active:scale-[0.99]"
+>
+  Entra nello shop →
+</Link>
+
+{/* Secondary CTA – refinement */}
+<Link
+  href="/scan"
+  className="mt-3 block text-center text-[13px] text-white/60 underline underline-offset-4 hover:text-white/85 transition"
+>
+  Vuoi affinare la palette? Rifai lo scan →
+</Link>
 
           <div className="mt-4 flex flex-wrap gap-2 text-[12px] text-white/55">
             <span className="select-none cursor-default rounded-full border border-white/10 bg-white/[0.03] px-3 py-2">
