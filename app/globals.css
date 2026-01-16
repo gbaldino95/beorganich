@@ -2591,3 +2591,12 @@ input, button, select, textarea {
 }
 .resultStickyBtnX:hover{ background:rgba(255,255,255,.92); }
 .resultStickyBtnX:active{ transform:scale(.99); }
+html, body {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+img, video, canvas {
+  max-width: 100%;
+}

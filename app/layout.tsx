@@ -7,8 +7,7 @@ export const metadata: Metadata = {
     default: "beorganich",
     template: "%s · beorganich",
   },
-  description:
-    "Palette personale e shop premium in cotone organico. Nessuna foto salvata.",
+  description: "Palette personale e shop premium in cotone organico. Nessuna foto salvata.",
   applicationName: "beorganich",
   manifest: "/manifest.webmanifest",
   appleWebApp: {
@@ -28,11 +27,9 @@ export const viewport: Viewport = {
 
 const TIKTOK_PIXEL_ID = "D5HMVMRC77UA3NVKE3G0";
 
-export default function RootLayout({
-  children,
-}: Readonly<{ children: React.ReactNode }>) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="it">
+    <html lang="it" className="bg-black">
       {/* ✅ TikTok Pixel */}
       <Script
         id="tiktok-pixel"
@@ -75,14 +72,17 @@ export default function RootLayout({
                 a.parentNode.insertBefore(o, a);
               };
 
-              ttq.load("D5HMVMRC77UA3NVKE3G0");
+              ttq.load("${TIKTOK_PIXEL_ID}");
               ttq.page();
             }(window, document, 'ttq');
           `,
         }}
       />
 
-      <body>{children}</body>
+      {/* ✅ FIX iOS: blocca overflow laterale + assicura sfondo nero */}
+      <body className="bg-black text-white overflow-x-hidden min-h-dvh">
+        {children}
+      </body>
     </html>
   );
 }
