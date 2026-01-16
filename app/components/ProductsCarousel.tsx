@@ -15,9 +15,12 @@ type Product = {
   image: string;
   handle?: string;
   tags?: string[];
-  // colore “dominante” del capo (mock). Quando avremo Shopify lo calcoliamo meglio.
-  hex?: string;
+  hex?: string; // colore stimato del capo
 };
+
+function cx(...parts: Array<string | false | undefined | null>) {
+  return parts.filter(Boolean).join(" ");
+}
 
 function clamp(n: number, a: number, b: number) {
   return Math.max(a, Math.min(b, n));
@@ -25,8 +28,7 @@ function clamp(n: number, a: number, b: number) {
 
 function hexToRgb(hex: string) {
   const h = hex.replace("#", "").trim();
-  const full =
-    h.length === 3 ? h.split("").map((c) => c + c).join("") : h.padEnd(6, "0");
+  const full = h.length === 3 ? h.split("").map((c) => c + c).join("") : h.padEnd(6, "0");
   const num = parseInt(full, 16);
   const r = (num >> 16) & 255;
   const g = (num >> 8) & 255;
@@ -37,7 +39,6 @@ function hexToRgb(hex: string) {
 function colorDistance(a: string, b: string) {
   const A = hexToRgb(a);
   const B = hexToRgb(b);
-  // Euclidean (buono e veloce). Quando mettiamo Shopify possiamo passare a DeltaE.
   const dr = A.r - B.r;
   const dg = A.g - B.g;
   const db = A.b - B.b;
@@ -46,25 +47,25 @@ function colorDistance(a: string, b: string) {
 
 function bestMatchScore(productHex: string | undefined, palette: PaletteItem[]) {
   if (!productHex || !palette?.length) return 0;
+
   let best = Number.POSITIVE_INFINITY;
-  for (const p of palette) {
-    best = Math.min(best, colorDistance(productHex, p.hex));
-  }
-  // normalizza: 0 (perfetto) -> 1 (scarso)
-  // dist max ~ 441; noi lo “stringiamo” per renderlo più sensibile
+  for (const p of palette) best = Math.min(best, colorDistance(productHex, p.hex));
+
+  // normalizza: 0..1 (più alto = meglio)
   const norm = clamp(best / 220, 0, 1);
-  // score 1..0
   return 1 - norm;
 }
 
 function productUrl(shopUrl: string, handle?: string) {
-  // ✅ TEMP: non hai Shopify -> manda allo shop URL e non si rompe nulla
-  // Quando mi dai Shopify, torniamo a: `${clean}/products/${handle}`
+  // ✅ oggi non hai Shopify: apriamo lo shop generico.
+  // Quando avrai Shopify, cambia a:
+  // const clean = shopUrl.replace(/\/$/, "");
+  // return handle ? `${clean}/products/${handle}` : clean;
   const clean = shopUrl.replace(/\/$/, "");
-  if (!handle) return clean;
   return clean;
 }
 
+/** Mock prodotti (come avevi tu) */
 const MOCK: Product[] = [
   {
     id: "p1",
@@ -128,118 +129,182 @@ const MOCK: Product[] = [
   },
 ];
 
+function matchLabel(pct: number) {
+  if (pct >= 88) return "Match perfetto";
+  if (pct >= 74) return "Match ottimo";
+  if (pct >= 60) return "Match buono";
+  return "Match OK";
+}
+
 export default function ProductsCarousel({ palette, shopUrl }: Props) {
   const [active, setActive] = useState<"top" | "all">("top");
 
   const ranked = useMemo(() => {
-    // rank by palette match
-    const list = MOCK.map((p) => {
+    return MOCK.map((p) => {
       const score = bestMatchScore(p.hex, palette);
       return { ...p, _score: score };
-    }).sort((a, b) => b._score - a._score);
-
-    return list;
+    }).sort((a, b) => (b as any)._score - (a as any)._score);
   }, [palette]);
 
   const topPicks = useMemo(() => ranked.slice(0, 4), [ranked]);
   const shown = active === "top" ? topPicks : ranked;
 
   return (
-    <div className="beoPC">
-      <div className="beoPCHead">
-        <div className="beoPCTitle">Capi consigliati per la tua palette</div>
-        <div className="beoPCSub">
-          Selezione rapida: pochi pezzi, massima coerenza.
+    <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-5 sm:p-6">
+      {/* HEADER */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <div className="text-[16px] sm:text-[18px] font-semibold text-white/90">
+            Match capi consigliati
+          </div>
+          <div className="mt-1 text-[12px] text-white/55">
+            Selezionati in base ai colori della tua palette. Clicca e apri.
+          </div>
         </div>
 
-        <div className="beoPCTabs">
+        {/* Tabs premium */}
+        <div className="inline-flex rounded-full border border-white/10 bg-black/20 p-1">
           <button
             type="button"
             onClick={() => setActive("top")}
-            className={active === "top" ? "beoTab active" : "beoTab"}
+            className={cx(
+              "h-9 rounded-full px-4 text-[12px] font-semibold transition",
+              active === "top"
+                ? "bg-white text-black"
+                : "text-white/75 hover:bg-white/[0.06]"
+            )}
+            aria-pressed={active === "top"}
           >
-            Top Picks
+            Top picks
           </button>
           <button
             type="button"
             onClick={() => setActive("all")}
-            className={active === "all" ? "beoTab active" : "beoTab"}
+            className={cx(
+              "h-9 rounded-full px-4 text-[12px] font-semibold transition",
+              active === "all"
+                ? "bg-white text-black"
+                : "text-white/75 hover:bg-white/[0.06]"
+            )}
+            aria-pressed={active === "all"}
           >
             Tutti
           </button>
         </div>
       </div>
 
-      <div className="beoRow" role="list">
+      {/* ROW */}
+      <div className="mt-4 grid gap-3 sm:grid-cols-2">
         {shown.map((p, idx) => {
           const score = (p as any)._score as number;
           const pct = Math.round(clamp(score, 0, 1) * 100);
+          const label = matchLabel(pct);
 
-          const badge =
-            pct >= 85 ? "Perfetto" : pct >= 70 ? "Ottimo" : pct >= 55 ? "Buono" : "OK";
+          // Hero solo per il primo dei Top picks
+          const isHero = active === "top" && idx === 0;
 
           return (
             <a
               key={p.id}
-              role="listitem"
               href={productUrl(shopUrl, p.handle)}
               target="_blank"
               rel="noreferrer"
-              className={cx("beoCard", idx === 0 && active === "top" && "beoCardHero")}
+              className={cx(
+                "group relative overflow-hidden rounded-3xl border border-white/10 bg-black/20",
+                "hover:border-white/20 hover:bg-white/[0.04] transition",
+                "active:scale-[0.99]",
+                isHero && "sm:col-span-2"
+              )}
+              role="listitem"
+              aria-label={`Apri ${p.title}`}
             >
-              <div className="beoImgWrap">
-                <img className="beoImg" src={p.image} alt={p.title} loading="lazy" />
-                <div className="beoFade" />
+              {/* IMAGE */}
+              <div className={cx("relative", isHero ? "h-[240px] sm:h-[280px]" : "h-[200px]")}>
+                <img
+                  src={p.image}
+                  alt={p.title}
+                  loading="lazy"
+                  className="h-full w-full object-cover opacity-[0.92] transition duration-500 group-hover:opacity-100 group-hover:scale-[1.02]"
+                />
 
-                <div className="beoTopRight">
-                  <div className="beoMatch">
-                    <div className="beoMatchPct">{pct}%</div>
-                    <div className="beoMatchLbl">{badge}</div>
-                  </div>
+                {/* soft gradient */}
+                <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/85 via-black/20 to-transparent" />
+
+                {/* Match badge */}
+                <div className="absolute right-4 top-4 rounded-2xl border border-white/12 bg-black/45 px-3 py-2 backdrop-blur">
+                  <div className="text-[14px] font-semibold text-white/90 leading-none">{pct}%</div>
+                  <div className="mt-1 text-[11px] text-white/60 leading-none">{label}</div>
                 </div>
 
+                {/* Color chip */}
                 {p.hex && (
-                  <div className="beoColorChip" title="colore stimato">
-                    <span className="beoChipDot" style={{ background: p.hex }} />
-                    <span className="beoChipTxt">{p.hex.toUpperCase()}</span>
+                  <div className="absolute left-4 top-4 inline-flex items-center gap-2 rounded-full border border-white/12 bg-black/45 px-3 py-2 backdrop-blur">
+                    <span className="h-2.5 w-2.5 rounded-full" style={{ background: p.hex }} />
+                    <span className="text-[11px] font-mono text-white/70">{p.hex.toUpperCase()}</span>
                   </div>
                 )}
+
+                {/* Match bar */}
+                <div className="absolute left-4 right-4 bottom-4">
+                  <div className="h-1.5 w-full rounded-full bg-white/10 overflow-hidden">
+                    <div
+                      className="h-full bg-white/60"
+                      style={{ width: `${clamp(pct, 0, 100)}%` }}
+                      aria-hidden
+                    />
+                  </div>
+                </div>
               </div>
 
-              <div className="beoBody">
-                <div className="beoName">{p.title}</div>
-                <div className="beoMeta">
-                  <span className="beoPrice">{p.price}</span>
-                  {!!p.tags?.length && (
-                    <span className="beoTags">
-                      {p.tags.slice(0, 2).map((t) => (
-                        <span key={t} className="beoTag">
-                          {t}
+              {/* BODY */}
+              <div className="p-4 sm:p-5">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <div className="text-[14px] sm:text-[15px] font-semibold text-white/90">
+                      {p.title}
+                    </div>
+
+                    <div className="mt-1 flex items-center gap-2 text-[12px] text-white/60">
+                      <span className="font-semibold text-white/80">{p.price}</span>
+
+                      {!!p.tags?.length && (
+                        <span className="inline-flex flex-wrap gap-2">
+                          {p.tags.slice(0, 2).map((t) => (
+                            <span
+                              key={t}
+                              className="rounded-full border border-white/10 bg-white/[0.03] px-2 py-1 text-[11px] text-white/60"
+                            >
+                              {t}
+                            </span>
+                          ))}
                         </span>
-                      ))}
-                    </span>
-                  )}
+                      )}
+                    </div>
+                  </div>
+
+                  {/* CTA */}
+                  <div className="shrink-0">
+                    <div className="inline-flex items-center gap-2 rounded-full bg-white px-3 py-2 text-[12px] font-semibold text-black transition group-hover:bg-white/90">
+                      Apri capo <span aria-hidden>→</span>
+                    </div>
+                  </div>
                 </div>
 
-                <div className="beoCtaRow">
-                  <span className="beoCta">Apri</span>
-                  <span className="beoArrow">→</span>
-                </div>
+                {isHero && (
+                  <div className="mt-3 text-[12px] leading-6 text-white/55">
+                    Questo è il capo più coerente con la tua palette. Se vuoi andare “sul sicuro”, parti da qui.
+                  </div>
+                )}
               </div>
             </a>
           );
         })}
       </div>
 
-      <div className="beoPCFoot">
-        <div className="beoPCNote">
-          * Matching colore “light” (mock). Quando mi dai Shopify lo rendiamo ultra preciso.
-        </div>
+      {/* FOOTNOTE */}
+      <div className="mt-4 text-[12px] text-white/45">
+        * Matching colore “light” (mock). Quando colleghiamo Shopify lo rendiamo ultra preciso (DeltaE + immagini prodotto).
       </div>
     </div>
   );
-}
-
-function cx(...parts: Array<string | false | undefined | null>) {
-  return parts.filter(Boolean).join(" ");
 }

@@ -3,12 +3,17 @@
 import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 
+// ✅ usa il tuo componente
+import ProductsCarousel from "@/app/components/ProductsCarousel";
+import type { PaletteItem } from "@/app/lib/paletteLogic";
+
 type PaletteColor = { name: string; hex: string };
+
 type ResultData = {
-  styleName?: string;         // es: "SAGE STUDIO"
-  styleTag?: string;          // es: "stile dominante"
-  headline?: string;          // es: "Minimal moderno. Coerenza immediata."
-  subcopy?: string;           // es: "Outfit puliti, zero sbatti..."
+  styleName?: string;
+  styleTag?: string;
+  headline?: string;
+  subcopy?: string;
   palette?: PaletteColor[];
 };
 
@@ -25,10 +30,13 @@ function safeJsonParse<T>(s: string | null): T | null {
   }
 }
 
+function isValidEmail(email: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+}
+
 /**
- * Best-effort: prova a leggere la palette salvata da localStorage.
- * (Nel tuo progetto hai già saveLastPalette(pal, meta); qui leggiamo il possibile salvataggio.)
- * Se i tuoi key sono diversi, aggiungili in KEYS.
+ * Best-effort: prova a leggere la palette salvata.
+ * Se le tue key sono diverse, aggiungile qui.
  */
 function readLastResultFromStorage(): ResultData | null {
   const KEYS = [
@@ -38,13 +46,13 @@ function readLastResultFromStorage(): ResultData | null {
     "beorganich_last_palette",
     "lastPalette",
     "lastResult",
+    "beorganich:savedPalette", // ✅ includo anche quella che useremo nel salva
   ];
 
   for (const k of KEYS) {
     const raw = safeJsonParse<any>(typeof window !== "undefined" ? window.localStorage.getItem(k) : null);
     if (!raw) continue;
 
-    // supporta formati diversi: { pal, meta } oppure { palette } ecc.
     const palette: PaletteColor[] | undefined =
       raw?.palette ??
       raw?.pal?.palette ??
@@ -55,8 +63,8 @@ function readLastResultFromStorage(): ResultData | null {
     if (Array.isArray(palette) && palette.length) {
       return {
         styleName: raw?.meta?.styleName ?? raw?.styleName ?? "SAGE STUDIO",
-        styleTag: raw?.meta?.depth ?? raw?.styleTag ?? "stile dominante",
-        headline: raw?.headline ?? "Minimal moderno. Coerenza immediata.",
+        styleTag: raw?.styleTag ?? "stile dominante",
+        headline: raw?.headline ?? "Minimal moderno. Sempre coerente.",
         subcopy:
           raw?.subcopy ??
           "Colori puliti, look ordinati: scegli in un attimo e compra senza ripensamenti.",
@@ -68,24 +76,38 @@ function readLastResultFromStorage(): ResultData | null {
   return null;
 }
 
+function buildVibeText(styleName?: string) {
+  const vibe = styleName ? `La mia vibe: ${styleName} ✨` : "La mia vibe: Beorganich ✨";
+  return (
+    `${vibe}\n` +
+    `Che vibe ti dà? Commenta 1 parola 👇\n` +
+    `#beorganich #personalcolor #outfitcheck #capsulewardrobe #stylehack`
+  );
+}
+
 export default function ResultClient() {
+  // ✅ metti qui il link shop (provvisorio ok)
+  const SHOP_URL = "https://beorganich.vercel.app/shop";
+
   const [data, setData] = useState<ResultData | null>(null);
 
-  // email form
+  const [toast, setToast] = useState<string | null>(null);
+
+  // email gate
   const [email, setEmail] = useState("");
+  const [consentDrops, setConsentDrops] = useState(true);
   const [emailStatus, setEmailStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
 
-  // caricamento result
   useEffect(() => {
     const fromStorage = readLastResultFromStorage();
 
-    // fallback demo se non trova nulla
+    // fallback demo
     const fallback: ResultData = {
       styleName: "SAGE STUDIO",
       styleTag: "stile dominante",
-      headline: "Minimal moderno. Coerenza immediata.",
+      headline: "Minimal moderno. Sempre coerente.",
       subcopy:
-        "Colori che puliscono la palette e ti danno subito un’aria ordinata. Il tuo “uniform” di stile.",
+        "Colori che ti danno subito un’aria ordinata. Il tuo “uniform” di stile: pulito, sicuro, di livello.",
       palette: [
         { name: "Neutro Profondo", hex: "#2F2B28" },
         { name: "Base Pelle", hex: "#CBB2A3" },
@@ -99,61 +121,96 @@ export default function ResultClient() {
     setData(fromStorage ?? fallback);
   }, []);
 
+  // auto-hide toast
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(null), 2200);
+    return () => clearTimeout(t);
+  }, [toast]);
+
   const palette = data?.palette ?? [];
 
-  // Testo trend TikTok
-  const shareText = useMemo(() => {
-    const main = data?.styleName ? `La mia vibe: ${data.styleName} ✨` : "La mia palette Beorganich ✨";
-    return (
-      `${main}\n` +
-      `Che vibe ti dà? 👀\n` +
-      `#beorganich #personalcolor #outfitcheck #styleguide`
-    );
-  }, [data?.styleName]);
+  // ProductsCarousel vuole PaletteItem[] => facciamo cast safe
+  const paletteForCarousel = useMemo(() => {
+    return palette.map((p) => ({ name: p.name, hex: p.hex })) as PaletteItem[];
+  }, [palette]);
+
+  const vibeText = useMemo(() => buildVibeText(data?.styleName), [data?.styleName]);
+
+  const onSavePalette = async () => {
+    try {
+      const payload = {
+        styleName: data?.styleName ?? null,
+        styleTag: data?.styleTag ?? null,
+        headline: data?.headline ?? null,
+        subcopy: data?.subcopy ?? null,
+        palette,
+        savedAt: Date.now(),
+      };
+
+      window.localStorage.setItem("beorganich:savedPalette", JSON.stringify(payload));
+      setToast("Palette salvata ✅");
+    } catch {
+      setToast("Errore 😕 Riprova.");
+    }
+  };
 
   const onSharePalette = async () => {
     const url = typeof window !== "undefined" ? window.location.href : "";
-    const text = shareText;
+    const text = vibeText;
 
     // 1) share sheet (mobile)
     try {
       if (navigator.share) {
         await navigator.share({ title: "La mia palette", text, url });
+        setToast("Condivisa ✨");
         return;
       }
     } catch {
-      // user ha chiuso: ok
       return;
     }
 
-    // 2) copia appunti
+    // 2) copia
     try {
       await navigator.clipboard.writeText(`${text}\n${url}`);
-      alert("Copiato ✨ Incollalo su TikTok/Instagram!");
+      setToast("Copiato ✨ Incollalo su TikTok!");
     } catch {
-      // 3) ultimo fallback
       prompt("Copia e incolla:", `${text}\n${url}`);
     }
   };
 
-  /**
-   * INVIO EMAIL
-   * Nota: qui faccio POST a /api/email.
-   * Se il tuo endpoint si chiama diverso, cambia SOLO l'URL.
-   * Body contiene email + palette + styleName.
-   */
   const onSubmitEmail = async (e: React.FormEvent) => {
     e.preventDefault();
-
     const value = email.trim();
-    if (!value || !value.includes("@")) {
+
+    if (!isValidEmail(value)) {
       setEmailStatus("error");
+      setToast("Inserisci un’email valida.");
       return;
     }
 
     setEmailStatus("sending");
 
     try {
+      // 1) salva lead (se endpoint esiste)
+      try {
+        await fetch("/api/lead", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            email: value,
+            consent_marketing: !!consentDrops,
+            source: "result_page_drop_alert",
+            palette,
+            styleName: data?.styleName ?? null,
+            url: typeof window !== "undefined" ? window.location.href : null,
+          }),
+        });
+      } catch {
+        // ignore
+      }
+
+      // 2) manda email (se /api/email è attivo)
       const res = await fetch("/api/email", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -162,19 +219,23 @@ export default function ResultClient() {
           styleName: data?.styleName ?? null,
           palette,
           url: typeof window !== "undefined" ? window.location.href : null,
+          mode: "drop_alert",
         }),
       });
 
       if (!res.ok) throw new Error("EMAIL_SEND_FAILED");
+
       setEmailStatus("sent");
+      setToast("Perfetto ✅ Drop alert attivato.");
     } catch {
       setEmailStatus("error");
+      setToast("Errore invio 😕 Riprova.");
     }
   };
 
   return (
     <div className="min-h-dvh bg-black text-white">
-      {/* NAV (NO “RISULTATO”) — Home a sinistra, Shop a destra */}
+      {/* NAV — no “RISULTATO”, Home a sinistra, Shop a destra */}
       <header className="mx-auto max-w-3xl px-4 pt-5">
         <div className="flex items-center justify-between">
           <div className="text-[12px] tracking-[0.28em] text-white/55">BEORGANICH</div>
@@ -197,9 +258,9 @@ export default function ResultClient() {
       </header>
 
       <main className="mx-auto max-w-3xl px-4 pb-28 pt-6">
-        {/* HERO CARD */}
+        {/* HERO */}
         <section className="rounded-3xl border border-white/10 bg-white/[0.03] p-5 sm:p-6">
-          {/* tagline pills (pulite, NON cliccabili) */}
+          {/* pills */}
           <div className="flex flex-wrap gap-2">
             <span className="select-none cursor-default rounded-full border border-white/10 bg-white/[0.03] px-3 py-2 text-[12px] text-white/75">
               {data?.styleName ?? "SAGE STUDIO"}
@@ -210,7 +271,7 @@ export default function ResultClient() {
           </div>
 
           <h1 className="mt-4 text-balance text-4xl font-semibold tracking-tight leading-[1.05]">
-            {data?.headline ?? "Minimal moderno. Coerenza immediata."}
+            {data?.headline ?? "Minimal moderno. Sempre coerente."}
           </h1>
 
           <p className="mt-3 text-[15px] leading-7 text-white/70">
@@ -218,7 +279,6 @@ export default function ResultClient() {
               "Colori puliti, look ordinati: scegli in un attimo e compra senza ripensamenti."}
           </p>
 
-          {/* CTA (NO ripetizioni) */}
           <div className="mt-5 flex gap-3">
             <Link
               href="/shop"
@@ -240,7 +300,7 @@ export default function ResultClient() {
               Palette personale
             </span>
             <span className="select-none cursor-default rounded-full border border-white/10 bg-white/[0.03] px-3 py-2">
-              Capi coerenti
+              Match capi
             </span>
             <span className="select-none cursor-default rounded-full border border-white/10 bg-white/[0.03] px-3 py-2">
               Nessuna foto salvata
@@ -248,37 +308,59 @@ export default function ResultClient() {
           </div>
         </section>
 
-        {/* PALETTE CARD (qui mettiamo il “Condividi” trend TikTok) */}
+        {/* PALETTE + SALVA/CONDIVIDI */}
         <section className="mt-5 rounded-3xl border border-white/10 bg-white/[0.03] p-5 sm:p-6">
           <div className="flex items-start justify-between gap-3">
             <div>
-              <h2 className="text-[18px] font-semibold text-white/90">La tua palette personale</h2>
+              <h2 className="text-[18px] font-semibold text-white/90">La tua palette</h2>
               <p className="mt-1 text-[12px] text-white/55">
                 Se sei indeciso: scegli un colore qui dentro e vai sul sicuro.
               </p>
             </div>
 
-            <button
-              onClick={onSharePalette}
-              className="relative z-10 rounded-full border border-white/15 bg-white/[0.03] px-4 py-2 text-[13px] text-white/85 hover:bg-white/[0.06] transition active:scale-[0.98]"
-            >
-              Condividi
-            </button>
+            <div className="flex items-center gap-2">
+              {/* SALVA (sx) */}
+              <button
+                onClick={onSavePalette}
+                className="
+                  relative z-10 inline-flex items-center justify-center gap-2
+                  rounded-full border border-white/15 bg-white/[0.03]
+                  px-4 py-2 text-[13px] text-white/90
+                  hover:bg-white/[0.08] hover:border-white/25
+                  transition active:scale-[0.98]
+                "
+              >
+                Salva
+                <span className="inline-block h-[6px] w-[6px] rounded-full bg-white/60" />
+              </button>
+
+              {/* CONDIVIDI (dx) */}
+              <button
+                onClick={onSharePalette}
+                className="
+                  relative z-10 inline-flex items-center justify-center gap-2
+                  rounded-full bg-white
+                  px-4 py-2 text-[13px] font-semibold text-black
+                  hover:bg-white/90
+                  transition active:scale-[0.98]
+                  shadow-[0_10px_34px_rgba(255,255,255,0.12)]
+                "
+              >
+                Condividi ✨
+              </button>
+            </div>
           </div>
 
-          {/* Marquee / palette row (se tu già usi marquee CSS, puoi mantenerlo) */}
+          {/* palette row */}
           <div className="mt-4 overflow-hidden rounded-2xl border border-white/10 bg-black/20">
             <div className="flex gap-3 p-4 overflow-x-auto no-scrollbar">
               {palette.map((c) => (
                 <div
-                  key={c.hex}
+                  key={`${c.name}-${c.hex}`}
                   className="min-w-[210px] flex items-center gap-3 rounded-2xl border border-white/10 bg-black/20 px-3 py-3"
                 >
                   <div className="relative">
-                    <div
-                      className="h-12 w-12 rounded-2xl border border-white/10"
-                      style={{ background: c.hex }}
-                    />
+                    <div className="h-12 w-12 rounded-2xl border border-white/10" style={{ background: c.hex }} />
                     <div
                       className="absolute -inset-2 rounded-[18px] opacity-30 blur-lg"
                       style={{ background: c.hex }}
@@ -295,18 +377,48 @@ export default function ResultClient() {
             </div>
           </div>
 
-          {/* TikTok tip */}
-          <div className="mt-3 text-[12px] text-white/45">
-            Tip TikTok: fai screenshot della palette e scrivi “che vibe ti dà?” 👀{" "}
-            <span className="text-white/70">#outfitcheck</span>
+          {/* vibe box */}
+          <div className="mt-3 rounded-2xl border border-white/10 bg-white/[0.02] p-4">
+            <div className="text-[12px] text-white/70">
+              <span className="text-white/90 font-medium">Vibe pronta per TikTok:</span>
+            </div>
+            <div className="mt-2 whitespace-pre-line text-[12px] leading-6 text-white/55">
+              {vibeText}
+            </div>
+            <div className="mt-2 text-[12px] text-white/45">
+              Tip: screenshot palette → post → “che vibe ti dà?” → commenti = algoritmo 🔥
+            </div>
           </div>
         </section>
 
-        {/* EMAIL GATE (fix click) */}
+        {/* ✅ PRODUCT CAROUSEL (match capi cliccabili) */}
+        <section className="mt-5">
+          <div className="flex items-end justify-between gap-3 px-1">
+            <div>
+              <div className="text-[16px] font-semibold text-white/90">Capi consigliati</div>
+              <div className="mt-1 text-[12px] text-white/55">
+                Selezionati per la tua palette. Clicca un capo per aprirlo.
+              </div>
+            </div>
+
+            <Link
+              href="/shop"
+              className="text-[12px] text-white/70 underline underline-offset-4 hover:text-white/90 transition"
+            >
+              Vai allo shop →
+            </Link>
+          </div>
+
+          <div className="mt-3">
+            <ProductsCarousel palette={paletteForCarousel} shopUrl={SHOP_URL} />
+          </div>
+        </section>
+
+        {/* EMAIL = SALVA + DROP ALERT */}
         <section className="mt-5 rounded-3xl border border-white/10 bg-white/[0.03] p-5 sm:p-6">
-          <div className="text-[16px] font-semibold text-white/90">Invia il risultato via email</div>
+          <div className="text-[16px] font-semibold text-white/90">Salva la palette + Drop alert</div>
           <div className="mt-1 text-[12px] text-white/55">
-            Ti mandiamo la palette e un link rapido allo shop. (Niente spam)
+            Ti inviamo la palette e ti avvisiamo quando escono capi perfetti per te.
           </div>
 
           <form onSubmit={onSubmitEmail} className="mt-4 grid gap-3">
@@ -322,6 +434,16 @@ export default function ResultClient() {
               autoComplete="email"
             />
 
+            <label className="flex items-center gap-2 text-[12px] text-white/60 select-none">
+              <input
+                type="checkbox"
+                checked={consentDrops}
+                onChange={(e) => setConsentDrops(e.target.checked)}
+                className="h-4 w-4 rounded border-white/20 bg-black/30"
+              />
+              Voglio essere avvisato dei drop compatibili con la mia palette
+            </label>
+
             <button
               type="submit"
               disabled={emailStatus === "sending"}
@@ -330,19 +452,36 @@ export default function ResultClient() {
                 emailStatus === "sending" && "opacity-70 cursor-not-allowed"
               )}
             >
-              {emailStatus === "sending" ? "Invio..." : emailStatus === "sent" ? "Inviata ✅" : "Invia email"}
+              {emailStatus === "sending"
+                ? "Attivo..."
+                : emailStatus === "sent"
+                ? "Attivato ✅"
+                : "Attiva Drop Alert"}
             </button>
 
             {emailStatus === "error" && (
               <div className="text-[12px] text-rose-200/80">
-                Email non valida o errore di invio. Riprova.
+                Email non valida o errore invio. Riprova.
               </div>
             )}
+
+            <div className="text-[12px] text-white/45">
+              Niente spam. Solo drop realmente coerenti con la tua palette.
+            </div>
           </form>
         </section>
       </main>
 
-      {/* STICKY CTA mobile (non deve bloccare i click sopra!) */}
+      {/* TOAST */}
+      {toast && (
+        <div className="fixed left-1/2 top-5 z-[60] -translate-x-1/2">
+          <div className="rounded-full border border-white/15 bg-black/70 px-4 py-2 text-[12px] text-white/85 backdrop-blur">
+            {toast}
+          </div>
+        </div>
+      )}
+
+      {/* STICKY CTA mobile (NON blocca click sopra) */}
       <div className="fixed bottom-0 left-0 right-0 z-50 lg:hidden pointer-events-none px-4 pb-[calc(env(safe-area-inset-bottom)+14px)] pt-3 bg-gradient-to-t from-black/90 to-transparent">
         <div className="mx-auto max-w-3xl pointer-events-auto">
           <Link
@@ -351,16 +490,16 @@ export default function ResultClient() {
           >
             Vai allo shop →
           </Link>
-          <div className="mt-2 text-center text-[12px] text-white/60">
-            Palette pronta · Nessuna foto salvata
-          </div>
+          <div className="mt-2 text-center text-[12px] text-white/60">Palette pronta · Match già selezionati</div>
         </div>
       </div>
     </div>
   );
 }
 
-/* opzionale: se non hai la classe no-scrollbar, puoi aggiungere in globals:
+/*
+Se non hai la classe no-scrollbar, aggiungi in globals.css:
+
 .no-scrollbar::-webkit-scrollbar { display:none; }
 .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 */
