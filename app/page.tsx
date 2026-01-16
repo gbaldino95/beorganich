@@ -128,7 +128,7 @@ export default function HomePage() {
   const marquee = useMemo(() => [...previewPalette, ...previewPalette], [previewPalette]);
 
   return (
-    // ✅ FIX scroll orizzontale
+    // ✅ no scroll laterale + no "tagli" strani su iOS
     <div className="min-h-dvh bg-black text-white overflow-x-hidden">
       {/* HEADER */}
       <header className="mx-auto flex max-w-6xl items-center justify-between px-4 sm:px-6 pt-4 sm:pt-6">
@@ -165,10 +165,10 @@ export default function HomePage() {
       </header>
 
       {/* MAIN */}
-      <main className="mx-auto max-w-6xl px-4 sm:px-6 pt-7 sm:pt-12 pb-24 lg:pb-16">
-        {/* Mobile-first: CTA subito, poi testo corto, poi preview */}
+      {/* ✅ padding-bottom più grande: evita che la CTA fissa “tagli” contenuti e crei barre strane */}
+      <main className="mx-auto max-w-6xl px-4 sm:px-6 pt-7 sm:pt-12 pb-[160px] lg:pb-16">
         <div className="grid gap-6 lg:grid-cols-2 lg:items-start">
-          {/* COL 1 (mobile: top) */}
+          {/* COL 1 */}
           <section className="space-y-4">
             <div className="inline-flex items-center gap-2">
               <span className="text-[11px] tracking-[0.28em] text-white/60">PERSONAL COLOR</span>
@@ -225,7 +225,6 @@ export default function HomePage() {
                 Oppure carica una foto
               </Link>
 
-              {/* Perché funziona (mobile super compatto) */}
               <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-4">
                 <div className="text-[14px] font-semibold text-white/90">Perché funziona</div>
                 <ul className="mt-2 space-y-2 text-[13px] text-white/70">
@@ -263,7 +262,6 @@ export default function HomePage() {
               </div>
             </div>
 
-            {/* Status helper (solo testo) */}
             <div className="text-center text-[12px] text-white/45">
               {cameraStatus === "ready" && "Camera pronta: apri lo scan e fai il test."}
               {cameraStatus === "locked" && "Camera bloccata: Chrome → Impostazioni sito → Camera → Consenti."}
@@ -287,7 +285,6 @@ export default function HomePage() {
               >
                 <div className="beoNoise" aria-hidden />
 
-                {/* ✅ Niente header “strano” + niente spazio vuoto */}
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <div className="text-[15px] font-semibold text-white/90">Palette preview</div>
@@ -298,9 +295,8 @@ export default function HomePage() {
                   </span>
                 </div>
 
-                <div className="mt-3 overflow-hidden rounded-2xl border border-white/10 bg-black/20">
-                  {/* ✅ wrapper overflow-hidden = niente scroll laterale sulla pagina */}
-                  <div className="beoMarquee flex gap-3 p-4">
+                <div className="beoMarqueeWrap mt-3 overflow-hidden rounded-2xl border border-white/10 bg-black/20">
+  <div className="beoMarquee flex gap-3 p-4 w-max">
                     {marquee.map((c, idx) => (
                       <div
                         key={`${c.hex}-${idx}`}
@@ -333,9 +329,9 @@ export default function HomePage() {
         </div>
       </main>
 
-      {/* STICKY CTA — mobile only (e NON deve creare scroll laterale) */}
-      <div className="fixed bottom-0 left-0 right-0 z-50 lg:hidden px-4 pb-[calc(env(safe-area-inset-bottom)+14px)] pt-3 bg-gradient-to-t from-black/90 to-transparent">
-        <div className="mx-auto max-w-6xl">
+      {/* ✅ STICKY CTA — FIX iOS: pointer-events-none fuori, pointer-events-auto dentro */}
+      <div className="fixed bottom-0 left-0 right-0 z-50 lg:hidden pointer-events-none px-4 pb-[calc(env(safe-area-inset-bottom)+14px)] pt-3 bg-gradient-to-t from-black/90 to-transparent">
+        <div className="mx-auto max-w-6xl pointer-events-auto">
           <Link
             href="/scan"
             className="
