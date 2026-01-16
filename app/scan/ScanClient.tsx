@@ -1213,7 +1213,7 @@ trackEvent(
   const percent = Math.round(quality * 100);
 
   return (
-    <div className="min-h-dvh bg-black text-white">
+  <div className="min-h-dvh bg-black text-white pb-[calc(env(safe-area-inset-bottom)+120px)]">
       {/* Hidden upload */}
       <input
         ref={fileInputRef}
@@ -1382,24 +1382,24 @@ trackEvent(
         </div>
       </main>
 
-      {/* Sticky bottom */}
-      <div className="fixed bottom-0 left-0 right-0 px-5 pb-[calc(env(safe-area-inset-bottom)+16px)] pt-4 bg-gradient-to-t from-black/90 to-transparent">
-        <div className="mx-auto flex max-w-md flex-col gap-3">
-          <button
-            onClick={startRitual}
-            className="h-14 w-full rounded-2xl bg-white text-black text-[15px] font-medium tracking-wide hover:bg-white/90 transition active:scale-[0.99]"
-          >
-            Avvia calibrazione
-          </button>
+      {/* STICKY CTA — sempre visibile */}
+<div className="fixed bottom-0 left-0 right-0 z-50 px-4 pb-[calc(env(safe-area-inset-bottom)+14px)] pt-3 bg-gradient-to-t from-black/92 via-black/70 to-transparent">
+  <div className="mx-auto max-w-md pointer-events-auto">
+    <button
+      onClick={startRitual}
+      className="h-14 w-full rounded-2xl bg-white text-black text-[15px] font-semibold tracking-wide transition active:scale-[0.99] shadow-[0_12px_36px_rgba(255,255,255,0.18)]"
+    >
+      Avvia calibrazione
+    </button>
 
-          <button
-            onClick={onPickPhoto}
-            className="h-12 w-full rounded-2xl border border-white/20 text-[14px] tracking-wide text-white/85 hover:bg-white/[0.06] transition active:scale-[0.99]"
-          >
-            Carica una foto
-          </button>
-        </div>
-      </div>
+    <button
+      onClick={onPickPhoto}
+      className="mt-2 h-12 w-full rounded-2xl border border-white/15 bg-white/[0.03] text-[14px] tracking-wide text-white/85 hover:bg-white/[0.06] transition active:scale-[0.99]"
+    >
+      Carica una foto
+    </button>
+  </div>
+</div>
     </div>
   );
 }
