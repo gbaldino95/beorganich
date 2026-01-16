@@ -3,7 +3,7 @@
 import React, { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import StatusPill from "@/app/components/StatusPill"; // <-- se rosso, dimmi dove sta esattamente StatusPill.tsx
+import StatusPill from "./components/StatusPill";
 
 type CamStatus = "idle" | "checking" | "ready" | "locked";
 
@@ -16,17 +16,14 @@ export default function HomePage() {
   const [tiltStyle, setTiltStyle] = useState<CSSProperties>({});
   const [tiltEnabled, setTiltEnabled] = useState(false);
 
-  // Enable tilt only if fine pointer + not reduced motion
   useEffect(() => {
     const mm = window.matchMedia?.("(pointer:fine)");
     const rm = window.matchMedia?.("(prefers-reduced-motion: reduce)");
-    const enabled = !!mm?.matches && !rm?.matches;
-    setTiltEnabled(enabled);
+    setTiltEnabled(!!mm?.matches && !rm?.matches);
   }, []);
 
   useEffect(() => {
     if (!tiltEnabled) return;
-
     const el = tiltRef.current;
     if (!el) return;
 
@@ -37,8 +34,8 @@ export default function HomePage() {
       const x = (e.clientX - rect.left) / rect.width;
       const y = (e.clientY - rect.top) / rect.height;
 
-      const rx = (0.5 - y) * 5;
-      const ry = (x - 0.5) * 7;
+      const rx = (0.5 - y) * 4.5;
+      const ry = (x - 0.5) * 6.5;
 
       if (raf) cancelAnimationFrame(raf);
       raf = requestAnimationFrame(() => {
@@ -87,7 +84,7 @@ export default function HomePage() {
             if (res.state === "granted") {
               setCameraStatus("ready");
               setPulseReady(true);
-              setTimeout(() => setPulseReady(false), 1200);
+              setTimeout(() => setPulseReady(false), 1100);
               return;
             }
             if (res.state === "denied") {
@@ -115,7 +112,7 @@ export default function HomePage() {
     };
   }, []);
 
-  // --- Palette preview
+  // --- Palette preview (marquee)
   const previewPalette = useMemo(
     () => [
       { name: "Neutro Profondo", hex: "#2F2B28" },
@@ -131,11 +128,12 @@ export default function HomePage() {
   const marquee = useMemo(() => [...previewPalette, ...previewPalette], [previewPalette]);
 
   return (
-    <div className="min-h-dvh bg-black text-white">
+    // ✅ FIX scroll orizzontale
+    <div className="min-h-dvh bg-black text-white overflow-x-hidden">
       {/* HEADER */}
-      <header className="mx-auto flex max-w-6xl items-center justify-between px-4 sm:px-6 pt-5 sm:pt-6">
+      <header className="mx-auto flex max-w-6xl items-center justify-between px-4 sm:px-6 pt-4 sm:pt-6">
         <Link href="/" className="group flex items-center gap-3">
-          <div className="relative h-10 w-44 sm:h-12 sm:w-52">
+          <div className="relative h-10 w-40 sm:h-12 sm:w-52">
             <Image
               src="/logo/logo-beorganich.png"
               alt="Beorganich"
@@ -167,84 +165,48 @@ export default function HomePage() {
       </header>
 
       {/* MAIN */}
-      <main className="mx-auto max-w-6xl px-4 sm:px-6 pb-44 lg:pb-24 pt-10 sm:pt-14">
-        <div className="grid gap-10 lg:grid-cols-2 lg:items-start">
-          {/* LEFT */}
-          <section className="space-y-6">
-            <div className="flex items-center gap-2">
-              <span className="text-[11px] tracking-[0.22em] text-white/70">PERSONAL COLOR</span>
-              <span className="h-[3px] w-[3px] rounded-full bg-white/35" aria-hidden />
-              <span className="text-[11px] tracking-[0.22em] text-white/45">ON-DEVICE</span>
+      <main className="mx-auto max-w-6xl px-4 sm:px-6 pt-7 sm:pt-12 pb-24 lg:pb-16">
+        {/* Mobile-first: CTA subito, poi testo corto, poi preview */}
+        <div className="grid gap-6 lg:grid-cols-2 lg:items-start">
+          {/* COL 1 (mobile: top) */}
+          <section className="space-y-4">
+            <div className="inline-flex items-center gap-2">
+              <span className="text-[11px] tracking-[0.28em] text-white/60">PERSONAL COLOR</span>
+              <span className="h-[3px] w-[3px] rounded-full bg-white/30" aria-hidden />
+              <span className="text-[11px] tracking-[0.28em] text-white/35">ON-DEVICE</span>
             </div>
 
-            <h1 className="text-balance text-4xl font-semibold tracking-tight sm:text-5xl lg:text-6xl">
+            <h1 className="text-balance text-[38px] leading-[1.05] font-semibold tracking-tight sm:text-5xl lg:text-6xl">
               I colori che ti stanno bene.
               <br />
-              <span className="text-white/80">Selezionati in 5 secondi.</span>
+              <span className="text-white/75">In 5 secondi.</span>
             </h1>
 
-            <p className="max-w-xl text-pretty text-[15px] sm:text-[16px] leading-7 text-white/70">
+            <p className="max-w-xl text-[15px] leading-7 text-white/70">
               Analisi discreta del volto (senza filtri) → palette personale → capi coerenti.
               <br />
               Più sicurezza quando compri. Meno resi. Più “wow”.
             </p>
 
-            <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-5 sm:p-6">
-              <div className="text-[14px] font-semibold text-white/90">Perché funziona</div>
-
-              <ul className="mt-3 grid gap-2 text-[13px] leading-6 text-white/70">
-                <li className="flex gap-3">
-                  <span className="mt-[9px] h-[5px] w-[5px] rounded-full bg-white/35" aria-hidden />
-                  <span>
-                    Evidenzia i colori che <span className="text-white/90 font-medium">ti illuminano</span>
-                  </span>
-                </li>
-                <li className="flex gap-3">
-                  <span className="mt-[9px] h-[5px] w-[5px] rounded-full bg-white/35" aria-hidden />
-                  <span>
-                    Ti guida su capi già <span className="text-white/90 font-medium">coerenti con la palette</span>
-                  </span>
-                </li>
-                <li className="flex gap-3">
-                  <span className="mt-[9px] h-[5px] w-[5px] rounded-full bg-white/35" aria-hidden />
-                  <span>
-                    Nessuna foto salvata: <span className="text-white/90 font-medium">calcolo sul dispositivo</span>
-                  </span>
-                </li>
-              </ul>
-
-              {/* badges NON cliccabili */}
-              <div className="mt-4 flex flex-wrap gap-2">
-                {["Risultato immediato", "Nessun salvataggio", "Mobile-first"].map((t) => (
-                  <span
-                    key={t}
-                    className="cursor-default select-none rounded-full border border-white/10 bg-white/[0.03] px-3 py-1 text-[12px] text-white/70"
-                  >
-                    {t}
-                  </span>
-                ))}
-              </div>
-            </div>
-          </section>
-
-          {/* RIGHT */}
-          <section className="space-y-4">
-            {/* CTA desktop/tablet ONLY (su mobile c'è lo sticky) */}
-            <div className="hidden lg:grid gap-3">
+            {/* CTA */}
+            <div className="grid gap-2">
               <Link
                 href="/scan"
                 className="
                   group relative flex items-center justify-center gap-3
                   overflow-hidden rounded-2xl
                   bg-white px-6 py-4
-                  text-[15px] font-medium tracking-wide text-black
+                  text-[15px] font-semibold tracking-wide text-black
                   transition active:scale-[0.99]
                   shadow-[0_14px_44px_rgba(255,255,255,0.16)]
                 "
               >
                 Effettua lo scan
-                <StatusPill status={cameraStatus} pulse={pulseReady} className="!text-black/80 !border-black/10 !bg-black/5" />
-
+                <StatusPill
+                  status={cameraStatus}
+                  pulse={pulseReady}
+                  className="!text-black/80 !border-black/10 !bg-black/5"
+                />
                 <span
                   className="
                     pointer-events-none absolute inset-0
@@ -263,32 +225,60 @@ export default function HomePage() {
                 Oppure carica una foto
               </Link>
 
-              <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-4">
-                <div className="text-[13px] text-white/90 font-medium">Il risultato migliore</div>
-                <div className="mt-1 text-[12px] leading-6 text-white/55">
-                  luce naturale · volto frontale · niente filtri
-                </div>
+              {/* Perché funziona (mobile super compatto) */}
+              <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-4">
+                <div className="text-[14px] font-semibold text-white/90">Perché funziona</div>
+                <ul className="mt-2 space-y-2 text-[13px] text-white/70">
+                  <li className="flex gap-2">
+                    <span className="mt-[7px] h-[4px] w-[4px] rounded-full bg-white/40" />
+                    <span>
+                      Evidenzia i colori che <span className="text-white/90 font-medium">ti illuminano</span>
+                    </span>
+                  </li>
+                  <li className="flex gap-2">
+                    <span className="mt-[7px] h-[4px] w-[4px] rounded-full bg-white/40" />
+                    <span>
+                      Ti guida su capi <span className="text-white/90 font-medium">coerenti con la palette</span>
+                    </span>
+                  </li>
+                  <li className="flex gap-2">
+                    <span className="mt-[7px] h-[4px] w-[4px] rounded-full bg-white/40" />
+                    <span>
+                      Nessuna foto salvata: <span className="text-white/90 font-medium">calcolo sul dispositivo</span>
+                    </span>
+                  </li>
+                </ul>
 
                 <div className="mt-3 flex flex-wrap gap-2">
-                  {["Privacy-first", "Palette + capi", "0 upload auto"].map((t) => (
-                    <span
-                      key={t}
-                      className="cursor-default select-none rounded-full border border-white/10 bg-white/[0.03] px-3 py-1 text-[12px] text-white/70"
-                    >
-                      {t}
-                    </span>
-                  ))}
+                  <span className="select-none cursor-default rounded-full border border-white/10 bg-white/[0.03] px-3 py-2 text-[12px] text-white/70">
+                    Risultato immediato
+                  </span>
+                  <span className="select-none cursor-default rounded-full border border-white/10 bg-white/[0.03] px-3 py-2 text-[12px] text-white/70">
+                    Nessun salvataggio
+                  </span>
+                  <span className="select-none cursor-default rounded-full border border-white/10 bg-white/[0.03] px-3 py-2 text-[12px] text-white/70">
+                    Mobile-first
+                  </span>
                 </div>
               </div>
             </div>
 
-            {/* PREVIEW — compatta, senza spazio vuoto */}
+            {/* Status helper (solo testo) */}
+            <div className="text-center text-[12px] text-white/45">
+              {cameraStatus === "ready" && "Camera pronta: apri lo scan e fai il test."}
+              {cameraStatus === "locked" && "Camera bloccata: Chrome → Impostazioni sito → Camera → Consenti."}
+              {(cameraStatus === "idle" || cameraStatus === "checking") && "Tip: luce naturale, volto frontale, niente filtri."}
+            </div>
+          </section>
+
+          {/* COL 2 */}
+          <section className="space-y-3">
             <div className="relative">
               <div className="beoAurora" aria-hidden />
 
               <div
                 ref={tiltRef}
-                className="relative overflow-hidden rounded-3xl border border-white/10 bg-white/[0.03]"
+                className="rounded-3xl border border-white/10 bg-white/[0.03] p-4 sm:p-5 overflow-hidden"
                 style={{
                   ...tiltStyle,
                   transition: tiltEnabled ? "transform 140ms ease" : undefined,
@@ -297,105 +287,74 @@ export default function HomePage() {
               >
                 <div className="beoNoise" aria-hidden />
 
-                {/* Header preview: pulito (niente “risultato reale” a caso) */}
-                <div className="flex items-start justify-between gap-4 px-5 pt-5">
+                {/* ✅ Niente header “strano” + niente spazio vuoto */}
+                <div className="flex items-center justify-between gap-3">
                   <div>
-                    <div className="text-[14px] font-semibold text-white/90">Palette preview</div>
-                    <div className="mt-1 text-[12px] text-white/55">Esempio scorrevole</div>
+                    <div className="text-[15px] font-semibold text-white/90">Palette preview</div>
+                    <div className="text-[12px] text-white/50">Esempio scorrevole</div>
                   </div>
-
-                  <span className="cursor-default select-none rounded-full border border-white/10 bg-white/[0.03] px-3 py-1 text-[12px] text-white/70">
-                    Live demo
+                  <span className="select-none cursor-default rounded-full border border-white/10 bg-white/[0.03] px-3 py-2 text-[12px] text-white/70">
+                    Preview
                   </span>
                 </div>
 
-                {/* Marquee */}
-                <div className="px-5 pb-4 pt-4">
-                  <div className="overflow-hidden rounded-2xl border border-white/10 bg-black/20">
-                    <div className="beoMarquee flex gap-3 p-4">
-                      {marquee.map((c, idx) => (
-                        <div
-                          key={`${c.hex}-${idx}`}
-                          className="min-w-[210px] sm:min-w-[240px] flex items-center gap-3 rounded-2xl border border-white/10 bg-black/20 px-3 py-3"
-                        >
-                          <div className="relative">
-                            <div className="h-12 w-12 rounded-2xl border border-white/10" style={{ background: c.hex }} />
-                            <div
-                              className="absolute -inset-2 rounded-[18px] opacity-30 blur-lg"
-                              style={{ background: c.hex }}
-                              aria-hidden
-                            />
-                          </div>
-
-                          <div className="flex flex-col">
-                            <div className="text-[13px] font-semibold text-white/90">{c.name}</div>
-                            <div className="text-[12px] text-white/55 font-mono">{c.hex}</div>
-                          </div>
+                <div className="mt-3 overflow-hidden rounded-2xl border border-white/10 bg-black/20">
+                  {/* ✅ wrapper overflow-hidden = niente scroll laterale sulla pagina */}
+                  <div className="beoMarquee flex gap-3 p-4">
+                    {marquee.map((c, idx) => (
+                      <div
+                        key={`${c.hex}-${idx}`}
+                        className="min-w-[200px] sm:min-w-[240px] flex items-center gap-3 rounded-2xl border border-white/10 bg-black/20 px-3 py-3"
+                      >
+                        <div className="relative">
+                          <div className="h-11 w-11 rounded-2xl border border-white/10" style={{ background: c.hex }} />
+                          <div
+                            className="absolute -inset-2 rounded-[18px] opacity-30 blur-lg"
+                            style={{ background: c.hex }}
+                            aria-hidden
+                          />
                         </div>
-                      ))}
-                    </div>
-                  </div>
 
-                  <div className="mt-3 text-[12px] text-white/55">
-                    Dopo lo scan: palette + capi consigliati + condivisione.
+                        <div className="flex flex-col">
+                          <div className="text-[13px] font-semibold text-white/90">{c.name}</div>
+                          <div className="text-[12px] text-white/55 font-mono">{c.hex}</div>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
-              </div>
-            </div>
 
-            {/* helper text leggero */}
-            <div className="text-center text-[12px] text-white/45">
-              {cameraStatus === "ready" && "Camera pronta: apri lo scan e fai il test."}
-              {cameraStatus === "locked" && "Camera bloccata: Chrome → Impostazioni sito → Camera → Consenti."}
-              {(cameraStatus === "idle" || cameraStatus === "checking") && "Tip: luce naturale, volto frontale, niente filtri."}
+                <div className="mt-3 text-[12px] text-white/45">
+                  Dopo lo scan: palette + capi consigliati + condivisione.
+                </div>
+              </div>
             </div>
           </section>
         </div>
       </main>
 
-      {/* STICKY CTA — MOBILE ONLY (unico, niente barra bianca fantasma) */}
-      <div className="fixed bottom-0 left-0 right-0 z-50 lg:hidden">
-        <div className="pointer-events-none absolute inset-x-0 -top-10 h-10 bg-gradient-to-t from-black/90 to-transparent" />
+      {/* STICKY CTA — mobile only (e NON deve creare scroll laterale) */}
+      <div className="fixed bottom-0 left-0 right-0 z-50 lg:hidden px-4 pb-[calc(env(safe-area-inset-bottom)+14px)] pt-3 bg-gradient-to-t from-black/90 to-transparent">
+        <div className="mx-auto max-w-6xl">
+          <Link
+            href="/scan"
+            className="
+              flex h-14 w-full items-center justify-center gap-2
+              rounded-2xl bg-white text-black
+              text-[15px] font-semibold tracking-wide
+              active:scale-[0.99] transition
+              shadow-[0_12px_36px_rgba(255,255,255,0.18)]
+            "
+          >
+            Effettua lo scan
+            <span className="select-none cursor-default rounded-full border border-black/10 bg-black/5 px-3 py-2 text-[12px] text-black/70">
+              AI
+            </span>
+          </Link>
 
-        <div className="px-4 pb-[calc(env(safe-area-inset-bottom)+14px)] pt-3 bg-black/80 backdrop-blur">
-          <div className="mx-auto max-w-md">
-            <Link
-              href="/scan"
-              className="
-                group relative flex h-14 w-full items-center justify-center gap-2
-                rounded-2xl bg-white text-black
-                text-[15px] font-semibold tracking-wide
-                active:scale-[0.99] transition
-                shadow-[0_12px_36px_rgba(255,255,255,0.18)]
-              "
-            >
-              Effettua lo scan
-              <span className="inline-flex items-center rounded-full border border-black/10 bg-black/5 px-2 py-[2px] text-[10px] font-semibold tracking-widest text-black/80">
-                AI
-              </span>
-
-              <span
-                className="
-                  pointer-events-none absolute inset-0
-                  -translate-x-full
-                  bg-gradient-to-r from-transparent via-black/5 to-transparent
-                  transition-transform duration-700
-                  group-hover:translate-x-full
-                "
-              />
-            </Link>
-
-            <div className="mt-2 text-center text-[12px] text-white/60">
-              5 secondi · Nessuna foto salvata
-            </div>
+          <div className="mt-2 text-center text-[12px] text-white/60">
+            5 secondi · Nessuna foto salvata
           </div>
-        </div>
-      </div>
-
-      {/* FOOTER */}
-      <div className="mx-auto max-w-6xl px-4 sm:px-6 pb-10">
-        <div className="text-[12px] text-white/45">
-          Nessuna immagine viene salvata. Il risultato è una guida di stile, non un giudizio.
         </div>
       </div>
     </div>

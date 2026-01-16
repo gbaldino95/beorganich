@@ -1,362 +1,505 @@
 "use client";
 
-import React, { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import Image from "next/image";
-import StatusPill from "../components/StatusPill";
 
-type CamStatus = "idle" | "checking" | "ready" | "locked";
+// ✅ usa il tuo componente
+import ProductsCarousel from "@/app/components/ProductsCarousel";
+import type { PaletteItem } from "@/app/lib/paletteLogic";
 
-export default function HomePage() {
-  const [cameraStatus, setCameraStatus] = useState<CamStatus>("checking");
-  const [pulseReady, setPulseReady] = useState(false);
+type PaletteColor = { name: string; hex: string };
 
-  // --- Tilt (desktop only)
-  const tiltRef = useRef<HTMLDivElement | null>(null);
-  const [tiltStyle, setTiltStyle] = useState<CSSProperties>({});
-  const [tiltEnabled, setTiltEnabled] = useState(false);
+type ResultData = {
+  styleName?: string;
+  styleTag?: string;
+  headline?: string;
+  subcopy?: string;
+  palette?: PaletteColor[];
+};
+
+function cx(...parts: Array<string | false | undefined | null>) {
+  return parts.filter(Boolean).join(" ");
+}
+
+function safeJsonParse<T>(s: string | null): T | null {
+  if (!s) return null;
+  try {
+    return JSON.parse(s) as T;
+  } catch {
+    return null;
+  }
+}
+
+function isValidEmail(email: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+}
+
+/**
+ * Best-effort: prova a leggere la palette salvata.
+ * Se le tue key sono diverse, aggiungile qui.
+ */
+function readLastResultFromStorage(): ResultData | null {
+  const KEYS = [
+    "beo:lastPalette",
+    "beo_last_palette",
+    "beorganich:lastPalette",
+    "beorganich_last_palette",
+    "lastPalette",
+    "lastResult",
+    "beorganich:savedPalette", // ✅ includo anche quella che useremo nel salva
+  ];
+
+  for (const k of KEYS) {
+    const raw = safeJsonParse<any>(typeof window !== "undefined" ? window.localStorage.getItem(k) : null);
+    if (!raw) continue;
+
+    const palette: PaletteColor[] | undefined =
+      raw?.palette ??
+      raw?.pal?.palette ??
+      raw?.pal ??
+      raw?.data?.palette ??
+      raw?.result?.palette;
+
+    if (Array.isArray(palette) && palette.length) {
+      return {
+        styleName: raw?.meta?.styleName ?? raw?.styleName ?? "SAGE STUDIO",
+        styleTag: raw?.styleTag ?? "stile dominante",
+        headline: raw?.headline ?? "Minimal moderno. Sempre coerente.",
+        subcopy:
+          raw?.subcopy ??
+          "Colori puliti, look ordinati: scegli in un attimo e compra senza ripensamenti.",
+        palette,
+      };
+    }
+  }
+
+  return null;
+}
+
+function buildVibeText(styleName?: string) {
+  const vibe = styleName ? `La mia vibe: ${styleName} ✨` : "La mia vibe: Beorganich ✨";
+  return (
+    `${vibe}\n` +
+    `Che vibe ti dà? Commenta 1 parola 👇\n` +
+    `#beorganich #personalcolor #outfitcheck #capsulewardrobe #stylehack`
+  );
+}
+
+export default function ResultClient() {
+  // ✅ metti qui il link shop (provvisorio ok)
+  const SHOP_URL = "https://beorganich.vercel.app/shop";
+
+  const [data, setData] = useState<ResultData | null>(null);
+
+  const [toast, setToast] = useState<string | null>(null);
+
+  // email gate
+  const [email, setEmail] = useState("");
+  const [consentDrops, setConsentDrops] = useState(true);
+  const [emailStatus, setEmailStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
 
   useEffect(() => {
-    const mm = window.matchMedia?.("(pointer:fine)");
-    const rm = window.matchMedia?.("(prefers-reduced-motion: reduce)");
-    setTiltEnabled(!!mm?.matches && !rm?.matches);
+    const fromStorage = readLastResultFromStorage();
+
+    // fallback demo
+    const fallback: ResultData = {
+      styleName: "SAGE STUDIO",
+      styleTag: "stile dominante",
+      headline: "Minimal moderno. Sempre coerente.",
+      subcopy:
+        "Colori che ti danno subito un’aria ordinata. Il tuo “uniform” di stile: pulito, sicuro, di livello.",
+      palette: [
+        { name: "Neutro Profondo", hex: "#2F2B28" },
+        { name: "Base Pelle", hex: "#CBB2A3" },
+        { name: "Caldo Soft", hex: "#C7A78F" },
+        { name: "Verde Salvia", hex: "#9AA39A" },
+        { name: "Blu Notte", hex: "#1C2430" },
+        { name: "Avorio", hex: "#E7DFD5" },
+      ],
+    };
+
+    setData(fromStorage ?? fallback);
   }, []);
 
+  // auto-hide toast
   useEffect(() => {
-    if (!tiltEnabled) return;
-    const el = tiltRef.current;
-    if (!el) return;
+    if (!toast) return;
+    const t = setTimeout(() => setToast(null), 2200);
+    return () => clearTimeout(t);
+  }, [toast]);
 
-    let raf: number | null = null;
+  const palette = data?.palette ?? [];
 
-    const onMove = (e: PointerEvent) => {
-      const rect = el.getBoundingClientRect();
-      const x = (e.clientX - rect.left) / rect.width;
-      const y = (e.clientY - rect.top) / rect.height;
+  // ProductsCarousel vuole PaletteItem[] => facciamo cast safe
+  const paletteForCarousel = useMemo(() => {
+    return palette.map((p) => ({ name: p.name, hex: p.hex })) as PaletteItem[];
+  }, [palette]);
 
-      const rx = (0.5 - y) * 4.5;
-      const ry = (x - 0.5) * 6.5;
+  const vibeText = useMemo(() => buildVibeText(data?.styleName), [data?.styleName]);
 
-      if (raf) cancelAnimationFrame(raf);
-      raf = requestAnimationFrame(() => {
-        setTiltStyle({
-          transform: `perspective(900px) rotateX(${rx}deg) rotateY(${ry}deg) translateY(-2px)`,
-        });
-      });
-    };
+  const onSavePalette = async () => {
+    try {
+      const payload = {
+        styleName: data?.styleName ?? null,
+        styleTag: data?.styleTag ?? null,
+        headline: data?.headline ?? null,
+        subcopy: data?.subcopy ?? null,
+        palette,
+        savedAt: Date.now(),
+      };
 
-    const onLeave = () => {
-      if (raf) cancelAnimationFrame(raf);
-      raf = requestAnimationFrame(() => {
-        setTiltStyle({
-          transform: "perspective(900px) rotateX(0deg) rotateY(0deg) translateY(0px)",
-        });
-      });
-    };
+      window.localStorage.setItem("beorganich:savedPalette", JSON.stringify(payload));
+      setToast("Palette salvata ✅");
+    } catch {
+      setToast("Errore 😕 Riprova.");
+    }
+  };
 
-    el.addEventListener("pointermove", onMove);
-    el.addEventListener("pointerleave", onLeave);
+  const onSharePalette = async () => {
+    const url = typeof window !== "undefined" ? window.location.href : "";
+    const text = vibeText;
 
-    return () => {
-      if (raf) cancelAnimationFrame(raf);
-      el.removeEventListener("pointermove", onMove);
-      el.removeEventListener("pointerleave", onLeave);
-    };
-  }, [tiltEnabled]);
-
-  // --- Camera status (does NOT ask for permission)
-  useEffect(() => {
-    let alive = true;
-
-    async function checkCamera() {
-      try {
-        if (!navigator?.mediaDevices?.getUserMedia) {
-          if (!alive) return;
-          setCameraStatus("locked");
-          return;
-        }
-
-        if ("permissions" in navigator && (navigator as any).permissions?.query) {
-          try {
-            const res = await (navigator as any).permissions.query({ name: "camera" });
-            if (!alive) return;
-
-            if (res.state === "granted") {
-              setCameraStatus("ready");
-              setPulseReady(true);
-              setTimeout(() => setPulseReady(false), 1100);
-              return;
-            }
-            if (res.state === "denied") {
-              setCameraStatus("locked");
-              return;
-            }
-            setCameraStatus("idle");
-            return;
-          } catch {
-            // ignore
-          }
-        }
-
-        if (!alive) return;
-        setCameraStatus("idle");
-      } catch {
-        if (!alive) return;
-        setCameraStatus("idle");
+    // 1) share sheet (mobile)
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: "La mia palette", text, url });
+        setToast("Condivisa ✨");
+        return;
       }
+    } catch {
+      return;
     }
 
-    checkCamera();
-    return () => {
-      alive = false;
-    };
-  }, []);
+    // 2) copia
+    try {
+      await navigator.clipboard.writeText(`${text}\n${url}`);
+      setToast("Copiato ✨ Incollalo su TikTok!");
+    } catch {
+      prompt("Copia e incolla:", `${text}\n${url}`);
+    }
+  };
 
-  // --- Palette preview (marquee)
-  const previewPalette = useMemo(
-    () => [
-      { name: "Neutro Profondo", hex: "#2F2B28" },
-      { name: "Base Pelle", hex: "#CBB2A3" },
-      { name: "Caldo Soft", hex: "#C7A78F" },
-      { name: "Verde Salvia", hex: "#9AA39A" },
-      { name: "Blu Notte", hex: "#1C2430" },
-      { name: "Avorio", hex: "#E7DFD5" },
-    ],
-    []
-  );
+  const onSubmitEmail = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const value = email.trim();
 
-  const marquee = useMemo(() => [...previewPalette, ...previewPalette], [previewPalette]);
+    if (!isValidEmail(value)) {
+      setEmailStatus("error");
+      setToast("Inserisci un’email valida.");
+      return;
+    }
+
+    setEmailStatus("sending");
+
+    try {
+      // 1) salva lead (se endpoint esiste)
+      try {
+        await fetch("/api/lead", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            email: value,
+            consent_marketing: !!consentDrops,
+            source: "result_page_drop_alert",
+            palette,
+            styleName: data?.styleName ?? null,
+            url: typeof window !== "undefined" ? window.location.href : null,
+          }),
+        });
+      } catch {
+        // ignore
+      }
+
+      // 2) manda email (se /api/email è attivo)
+      const res = await fetch("/api/email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: value,
+          styleName: data?.styleName ?? null,
+          palette,
+          url: typeof window !== "undefined" ? window.location.href : null,
+          mode: "drop_alert",
+        }),
+      });
+
+      if (!res.ok) throw new Error("EMAIL_SEND_FAILED");
+
+      setEmailStatus("sent");
+      setToast("Perfetto ✅ Drop alert attivato.");
+    } catch {
+      setEmailStatus("error");
+      setToast("Errore invio 😕 Riprova.");
+    }
+  };
 
   return (
-    // ✅ FIX scroll orizzontale
-    <div className="min-h-dvh bg-black text-white overflow-x-hidden">
-      {/* HEADER */}
-      <header className="mx-auto flex max-w-6xl items-center justify-between px-4 sm:px-6 pt-4 sm:pt-6">
-        <Link href="/" className="group flex items-center gap-3">
-          <div className="relative h-10 w-40 sm:h-12 sm:w-52">
-            <Image
-              src="/logo/logo-beorganich.png"
-              alt="Beorganich"
-              fill
-              priority
-              className="object-contain opacity-90 transition duration-300 group-hover:opacity-100 drop-shadow-[0_10px_28px_rgba(255,255,255,0.07)]"
-            />
-          </div>
+    <div className="min-h-dvh bg-black text-white">
+      {/* NAV — no “RISULTATO”, Home a sinistra, Shop a destra */}
+      <header className="mx-auto max-w-3xl px-4 pt-5">
+        <div className="flex items-center justify-between">
+          <div className="text-[12px] tracking-[0.28em] text-white/55">BEORGANICH</div>
 
-          <div className="hidden sm:block">
-            <div className="text-[11px] tracking-[0.22em] text-white/55 transition duration-300 group-hover:text-white/70">
-              ORGANIC COTTON • PERSONAL COLOR
-            </div>
+          <div className="flex items-center gap-2">
+            <Link
+              href="/"
+              className="rounded-full border border-white/15 bg-white/[0.03] px-4 py-2 text-[13px] text-white/80 hover:bg-white/[0.06] transition"
+            >
+              Home
+            </Link>
+            <Link
+              href="/shop"
+              className="rounded-full bg-white px-4 py-2 text-[13px] font-semibold text-black hover:bg-white/90 transition"
+            >
+              Shop
+            </Link>
           </div>
-        </Link>
-
-        {/* SOLO SHOP */}
-        <Link
-          href="/shop"
-          className="
-            rounded-full bg-white px-4 py-2
-            text-[13px] font-semibold tracking-wide text-black
-            transition-all duration-300 hover:bg-white/90 active:scale-[0.97]
-            shadow-[0_10px_30px_rgba(255,255,255,0.15)]
-          "
-        >
-          Shop
-        </Link>
+        </div>
       </header>
 
-      {/* MAIN */}
-      <main className="mx-auto max-w-6xl px-4 sm:px-6 pt-7 sm:pt-12 pb-24 lg:pb-16">
-        {/* Mobile-first: CTA subito, poi testo corto, poi preview */}
-        <div className="grid gap-6 lg:grid-cols-2 lg:items-start">
-          {/* COL 1 (mobile: top) */}
-          <section className="space-y-4">
-            <div className="inline-flex items-center gap-2">
-              <span className="text-[11px] tracking-[0.28em] text-white/60">PERSONAL COLOR</span>
-              <span className="h-[3px] w-[3px] rounded-full bg-white/30" aria-hidden />
-              <span className="text-[11px] tracking-[0.28em] text-white/35">ON-DEVICE</span>
+      <main className="mx-auto max-w-3xl px-4 pb-28 pt-6">
+        {/* HERO */}
+        <section className="rounded-3xl border border-white/10 bg-white/[0.03] p-5 sm:p-6">
+          {/* pills */}
+          <div className="flex flex-wrap gap-2">
+            <span className="select-none cursor-default rounded-full border border-white/10 bg-white/[0.03] px-3 py-2 text-[12px] text-white/75">
+              {data?.styleName ?? "SAGE STUDIO"}
+            </span>
+            <span className="select-none cursor-default rounded-full border border-white/10 bg-white/[0.03] px-3 py-2 text-[12px] text-white/60">
+              {data?.styleTag ?? "stile dominante"}
+            </span>
+          </div>
+
+          <h1 className="mt-4 text-balance text-4xl font-semibold tracking-tight leading-[1.05]">
+            {data?.headline ?? "Minimal moderno. Sempre coerente."}
+          </h1>
+
+          <p className="mt-3 text-[15px] leading-7 text-white/70">
+            {data?.subcopy ??
+              "Colori puliti, look ordinati: scegli in un attimo e compra senza ripensamenti."}
+          </p>
+
+          <div className="mt-5 flex gap-3">
+            <Link
+              href="/shop"
+              className="relative z-10 flex h-14 flex-1 items-center justify-center rounded-2xl bg-white text-black text-[15px] font-semibold hover:bg-white/90 transition active:scale-[0.99]"
+            >
+              Vai allo shop →
+            </Link>
+
+            <Link
+              href="/scan"
+              className="relative z-10 flex h-14 w-[42%] items-center justify-center rounded-2xl border border-white/15 bg-white/[0.02] text-white/85 hover:bg-white/[0.06] transition active:scale-[0.99]"
+            >
+              Rifai scan
+            </Link>
+          </div>
+
+          <div className="mt-4 flex flex-wrap gap-2 text-[12px] text-white/55">
+            <span className="select-none cursor-default rounded-full border border-white/10 bg-white/[0.03] px-3 py-2">
+              Palette personale
+            </span>
+            <span className="select-none cursor-default rounded-full border border-white/10 bg-white/[0.03] px-3 py-2">
+              Match capi
+            </span>
+            <span className="select-none cursor-default rounded-full border border-white/10 bg-white/[0.03] px-3 py-2">
+              Nessuna foto salvata
+            </span>
+          </div>
+        </section>
+
+        {/* PALETTE + SALVA/CONDIVIDI */}
+        <section className="mt-5 rounded-3xl border border-white/10 bg-white/[0.03] p-5 sm:p-6">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h2 className="text-[18px] font-semibold text-white/90">La tua palette</h2>
+              <p className="mt-1 text-[12px] text-white/55">
+                Se sei indeciso: scegli un colore qui dentro e vai sul sicuro.
+              </p>
             </div>
 
-            <h1 className="text-balance text-[38px] leading-[1.05] font-semibold tracking-tight sm:text-5xl lg:text-6xl">
-              I colori che ti stanno bene.
-              <br />
-              <span className="text-white/75">In 5 secondi.</span>
-            </h1>
-
-            <p className="max-w-xl text-[15px] leading-7 text-white/70">
-              Analisi discreta del volto (senza filtri) → palette personale → capi coerenti.
-              <br />
-              Più sicurezza quando compri. Meno resi. Più “wow”.
-            </p>
-
-            {/* CTA */}
-            <div className="grid gap-2">
-              <Link
-                href="/scan"
+            <div className="flex items-center gap-2">
+              {/* SALVA (sx) */}
+              <button
+                onClick={onSavePalette}
                 className="
-                  group relative flex items-center justify-center gap-3
-                  overflow-hidden rounded-2xl
-                  bg-white px-6 py-4
-                  text-[15px] font-semibold tracking-wide text-black
-                  transition active:scale-[0.99]
-                  shadow-[0_14px_44px_rgba(255,255,255,0.16)]
+                  relative z-10 inline-flex items-center justify-center gap-2
+                  rounded-full border border-white/15 bg-white/[0.03]
+                  px-4 py-2 text-[13px] text-white/90
+                  hover:bg-white/[0.08] hover:border-white/25
+                  transition active:scale-[0.98]
                 "
               >
-                Effettua lo scan
-                <StatusPill
-                  status={cameraStatus}
-                  pulse={pulseReady}
-                  className="!text-black/80 !border-black/10 !bg-black/5"
-                />
-                <span
-                  className="
-                    pointer-events-none absolute inset-0
-                    -translate-x-full
-                    bg-gradient-to-r from-transparent via-black/5 to-transparent
-                    transition-transform duration-700
-                    group-hover:translate-x-full
-                  "
-                />
-              </Link>
+                Salva
+                <span className="inline-block h-[6px] w-[6px] rounded-full bg-white/60" />
+              </button>
 
-              <Link
-                href="/scan?upload=1"
-                className="block text-center text-[12px] text-white/60 underline underline-offset-4 hover:text-white/85 transition"
+              {/* CONDIVIDI (dx) */}
+              <button
+                onClick={onSharePalette}
+                className="
+                  relative z-10 inline-flex items-center justify-center gap-2
+                  rounded-full bg-white
+                  px-4 py-2 text-[13px] font-semibold text-black
+                  hover:bg-white/90
+                  transition active:scale-[0.98]
+                  shadow-[0_10px_34px_rgba(255,255,255,0.12)]
+                "
               >
-                Oppure carica una foto
-              </Link>
+                Condividi ✨
+              </button>
+            </div>
+          </div>
 
-              {/* Perché funziona (mobile super compatto) */}
-              <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-4">
-                <div className="text-[14px] font-semibold text-white/90">Perché funziona</div>
-                <ul className="mt-2 space-y-2 text-[13px] text-white/70">
-                  <li className="flex gap-2">
-                    <span className="mt-[7px] h-[4px] w-[4px] rounded-full bg-white/40" />
-                    <span>
-                      Evidenzia i colori che <span className="text-white/90 font-medium">ti illuminano</span>
-                    </span>
-                  </li>
-                  <li className="flex gap-2">
-                    <span className="mt-[7px] h-[4px] w-[4px] rounded-full bg-white/40" />
-                    <span>
-                      Ti guida su capi <span className="text-white/90 font-medium">coerenti con la palette</span>
-                    </span>
-                  </li>
-                  <li className="flex gap-2">
-                    <span className="mt-[7px] h-[4px] w-[4px] rounded-full bg-white/40" />
-                    <span>
-                      Nessuna foto salvata: <span className="text-white/90 font-medium">calcolo sul dispositivo</span>
-                    </span>
-                  </li>
-                </ul>
+          {/* palette row */}
+          <div className="mt-4 overflow-hidden rounded-2xl border border-white/10 bg-black/20">
+            <div className="flex gap-3 p-4 overflow-x-auto no-scrollbar">
+              {palette.map((c) => (
+                <div
+                  key={`${c.name}-${c.hex}`}
+                  className="min-w-[210px] flex items-center gap-3 rounded-2xl border border-white/10 bg-black/20 px-3 py-3"
+                >
+                  <div className="relative">
+                    <div className="h-12 w-12 rounded-2xl border border-white/10" style={{ background: c.hex }} />
+                    <div
+                      className="absolute -inset-2 rounded-[18px] opacity-30 blur-lg"
+                      style={{ background: c.hex }}
+                      aria-hidden
+                    />
+                  </div>
 
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <span className="select-none cursor-default rounded-full border border-white/10 bg-white/[0.03] px-3 py-2 text-[12px] text-white/70">
-                    Risultato immediato
-                  </span>
-                  <span className="select-none cursor-default rounded-full border border-white/10 bg-white/[0.03] px-3 py-2 text-[12px] text-white/70">
-                    Nessun salvataggio
-                  </span>
-                  <span className="select-none cursor-default rounded-full border border-white/10 bg-white/[0.03] px-3 py-2 text-[12px] text-white/70">
-                    Mobile-first
-                  </span>
+                  <div className="flex flex-col">
+                    <div className="text-[13px] font-semibold text-white/90">{c.name}</div>
+                    <div className="text-[12px] text-white/55 font-mono">{c.hex}</div>
+                  </div>
                 </div>
+              ))}
+            </div>
+          </div>
+
+          {/* vibe box */}
+          <div className="mt-3 rounded-2xl border border-white/10 bg-white/[0.02] p-4">
+            <div className="text-[12px] text-white/70">
+              <span className="text-white/90 font-medium">Vibe pronta per TikTok:</span>
+            </div>
+            <div className="mt-2 whitespace-pre-line text-[12px] leading-6 text-white/55">
+              {vibeText}
+            </div>
+            <div className="mt-2 text-[12px] text-white/45">
+              Tip: screenshot palette → post → “che vibe ti dà?” → commenti = algoritmo 🔥
+            </div>
+          </div>
+        </section>
+
+        {/* ✅ PRODUCT CAROUSEL (match capi cliccabili) */}
+        <section className="mt-5">
+          <div className="flex items-end justify-between gap-3 px-1">
+            <div>
+              <div className="text-[16px] font-semibold text-white/90">Capi consigliati</div>
+              <div className="mt-1 text-[12px] text-white/55">
+                Selezionati per la tua palette. Clicca un capo per aprirlo.
               </div>
             </div>
 
-            {/* Status helper (solo testo) */}
-            <div className="text-center text-[12px] text-white/45">
-              {cameraStatus === "ready" && "Camera pronta: apri lo scan e fai il test."}
-              {cameraStatus === "locked" && "Camera bloccata: Chrome → Impostazioni sito → Camera → Consenti."}
-              {(cameraStatus === "idle" || cameraStatus === "checking") && "Tip: luce naturale, volto frontale, niente filtri."}
-            </div>
-          </section>
+            <Link
+              href="/shop"
+              className="text-[12px] text-white/70 underline underline-offset-4 hover:text-white/90 transition"
+            >
+              Vai allo shop →
+            </Link>
+          </div>
 
-          {/* COL 2 */}
-          <section className="space-y-3">
-            <div className="relative">
-              <div className="beoAurora" aria-hidden />
+          <div className="mt-3">
+            <ProductsCarousel palette={paletteForCarousel} shopUrl={SHOP_URL} />
+          </div>
+        </section>
 
-              <div
-                ref={tiltRef}
-                className="rounded-3xl border border-white/10 bg-white/[0.03] p-4 sm:p-5 overflow-hidden"
-                style={{
-                  ...tiltStyle,
-                  transition: tiltEnabled ? "transform 140ms ease" : undefined,
-                  willChange: tiltEnabled ? "transform" : undefined,
-                }}
-              >
-                <div className="beoNoise" aria-hidden />
+        {/* EMAIL = SALVA + DROP ALERT */}
+        <section className="mt-5 rounded-3xl border border-white/10 bg-white/[0.03] p-5 sm:p-6">
+          <div className="text-[16px] font-semibold text-white/90">Salva la palette + Drop alert</div>
+          <div className="mt-1 text-[12px] text-white/55">
+            Ti inviamo la palette e ti avvisiamo quando escono capi perfetti per te.
+          </div>
 
-                {/* ✅ Niente header “strano” + niente spazio vuoto */}
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <div className="text-[15px] font-semibold text-white/90">Palette preview</div>
-                    <div className="text-[12px] text-white/50">Esempio scorrevole</div>
-                  </div>
-                  <span className="select-none cursor-default rounded-full border border-white/10 bg-white/[0.03] px-3 py-2 text-[12px] text-white/70">
-                    Preview
-                  </span>
-                </div>
+          <form onSubmit={onSubmitEmail} className="mt-4 grid gap-3">
+            <input
+              value={email}
+              onChange={(e) => {
+                setEmail(e.target.value);
+                if (emailStatus !== "idle") setEmailStatus("idle");
+              }}
+              placeholder="la-tua-email@email.com"
+              className="h-12 w-full rounded-2xl border border-white/10 bg-black/30 px-4 text-[14px] text-white/90 outline-none focus:border-white/25"
+              inputMode="email"
+              autoComplete="email"
+            />
 
-                <div className="mt-3 overflow-hidden rounded-2xl border border-white/10 bg-black/20">
-                  {/* ✅ wrapper overflow-hidden = niente scroll laterale sulla pagina */}
-                  <div className="beoMarquee flex gap-3 p-4">
-                    {marquee.map((c, idx) => (
-                      <div
-                        key={`${c.hex}-${idx}`}
-                        className="min-w-[200px] sm:min-w-[240px] flex items-center gap-3 rounded-2xl border border-white/10 bg-black/20 px-3 py-3"
-                      >
-                        <div className="relative">
-                          <div className="h-11 w-11 rounded-2xl border border-white/10" style={{ background: c.hex }} />
-                          <div
-                            className="absolute -inset-2 rounded-[18px] opacity-30 blur-lg"
-                            style={{ background: c.hex }}
-                            aria-hidden
-                          />
-                        </div>
+            <label className="flex items-center gap-2 text-[12px] text-white/60 select-none">
+              <input
+                type="checkbox"
+                checked={consentDrops}
+                onChange={(e) => setConsentDrops(e.target.checked)}
+                className="h-4 w-4 rounded border-white/20 bg-black/30"
+              />
+              Voglio essere avvisato dei drop compatibili con la mia palette
+            </label>
 
-                        <div className="flex flex-col">
-                          <div className="text-[13px] font-semibold text-white/90">{c.name}</div>
-                          <div className="text-[12px] text-white/55 font-mono">{c.hex}</div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
+            <button
+              type="submit"
+              disabled={emailStatus === "sending"}
+              className={cx(
+                "relative z-10 h-12 w-full rounded-2xl bg-white text-black text-[14px] font-semibold transition active:scale-[0.99]",
+                emailStatus === "sending" && "opacity-70 cursor-not-allowed"
+              )}
+            >
+              {emailStatus === "sending"
+                ? "Attivo..."
+                : emailStatus === "sent"
+                ? "Attivato ✅"
+                : "Attiva Drop Alert"}
+            </button>
 
-                <div className="mt-3 text-[12px] text-white/45">
-                  Dopo lo scan: palette + capi consigliati + condivisione.
-                </div>
+            {emailStatus === "error" && (
+              <div className="text-[12px] text-rose-200/80">
+                Email non valida o errore invio. Riprova.
               </div>
+            )}
+
+            <div className="text-[12px] text-white/45">
+              Niente spam. Solo drop realmente coerenti con la tua palette.
             </div>
-          </section>
-        </div>
+          </form>
+        </section>
       </main>
 
-      {/* STICKY CTA — mobile only (e NON deve creare scroll laterale) */}
-      <div className="fixed bottom-0 left-0 right-0 z-50 lg:hidden px-4 pb-[calc(env(safe-area-inset-bottom)+14px)] pt-3 bg-gradient-to-t from-black/90 to-transparent">
-        <div className="mx-auto max-w-6xl">
-          <Link
-            href="/scan"
-            className="
-              flex h-14 w-full items-center justify-center gap-2
-              rounded-2xl bg-white text-black
-              text-[15px] font-semibold tracking-wide
-              active:scale-[0.99] transition
-              shadow-[0_12px_36px_rgba(255,255,255,0.18)]
-            "
-          >
-            Effettua lo scan
-            <span className="select-none cursor-default rounded-full border border-black/10 bg-black/5 px-3 py-2 text-[12px] text-black/70">
-              AI
-            </span>
-          </Link>
-
-          <div className="mt-2 text-center text-[12px] text-white/60">
-            5 secondi · Nessuna foto salvata
+      {/* TOAST */}
+      {toast && (
+        <div className="fixed left-1/2 top-5 z-[60] -translate-x-1/2">
+          <div className="rounded-full border border-white/15 bg-black/70 px-4 py-2 text-[12px] text-white/85 backdrop-blur">
+            {toast}
           </div>
+        </div>
+      )}
+
+      {/* STICKY CTA mobile (NON blocca click sopra) */}
+      <div className="fixed bottom-0 left-0 right-0 z-50 lg:hidden pointer-events-none px-4 pb-[calc(env(safe-area-inset-bottom)+14px)] pt-3 bg-gradient-to-t from-black/90 to-transparent">
+        <div className="mx-auto max-w-3xl pointer-events-auto">
+          <Link
+            href="/shop"
+            className="flex h-14 w-full items-center justify-center rounded-2xl bg-white text-black text-[15px] font-semibold active:scale-[0.99] transition shadow-[0_12px_36px_rgba(255,255,255,0.18)]"
+          >
+            Vai allo shop →
+          </Link>
+          <div className="mt-2 text-center text-[12px] text-white/60">Palette pronta · Match già selezionati</div>
         </div>
       </div>
     </div>
   );
 }
+
+/*
+Se non hai la classe no-scrollbar, aggiungi in globals.css:
+
+.no-scrollbar::-webkit-scrollbar { display:none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+*/
