@@ -50,7 +50,9 @@ function readLastResultFromStorage(): ResultData | null {
   ];
 
   for (const k of KEYS) {
-    const raw = safeJsonParse<any>(typeof window !== "undefined" ? window.localStorage.getItem(k) : null);
+    const raw = safeJsonParse<any>(
+      typeof window !== "undefined" ? window.localStorage.getItem(k) : null
+    );
     if (!raw) continue;
 
     const palette: PaletteColor[] | undefined =
@@ -90,7 +92,6 @@ export default function ResultClient() {
   const SHOP_URL = "https://beorganich.vercel.app/shop";
 
   const [data, setData] = useState<ResultData | null>(null);
-
   const [toast, setToast] = useState<string | null>(null);
 
   // email gate
@@ -177,6 +178,12 @@ export default function ResultClient() {
     } catch {
       prompt("Copia e incolla:", `${text}\n${url}`);
     }
+  };
+
+  const scrollToPalette = () => {
+    const el = document.getElementById("palette");
+    if (!el) return;
+    requestAnimationFrame(() => el.scrollIntoView({ behavior: "smooth", block: "start" }));
   };
 
   const onSubmitEmail = async (e: React.FormEvent) => {
@@ -280,26 +287,25 @@ export default function ResultClient() {
           </p>
 
           {/* Fashion authority close */}
-<div className="mt-6 text-center text-[14px] leading-6 text-white/80">
-  <div className="font-medium">Questa palette è la tua firma.</div>
-  <div className="text-white/55">Usala come riferimento, sempre.</div>
-</div>
+          <div className="mt-6 text-center text-[14px] leading-6 text-white/80">
+            <div className="font-medium">Questa palette è la tua firma.</div>
+            <div className="text-white/55">Usala come riferimento, sempre.</div>
+          </div>
 
-{/* Primary CTA */}
-<Link
-  href="/shop"
-  className="mt-5 flex h-14 w-full items-center justify-center rounded-2xl bg-white text-black text-[15px] font-semibold tracking-wide transition active:scale-[0.99]"
->
-  Entra nello shop →
-</Link>
+          {/* ✅ CTA premium: porta alla palette (NON shop) */}
+          <button
+            type="button"
+            onClick={scrollToPalette}
+            className="group mt-5 flex w-full items-center justify-center gap-3 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-[13px] text-white/80 hover:bg-white/[0.06] transition active:scale-[0.99]"
+          >
+            <span className="text-white/70">Vuoi affinare la palette?</span>
+            <span className="font-semibold text-white/90">La tua firma è qui sotto</span>
 
-{/* Secondary CTA – refinement */}
-<Link
-  href="/scan"
-  className="mt-3 block text-center text-[13px] text-white/60 underline underline-offset-4 hover:text-white/85 transition"
->
-  Vuoi affinare la palette? Rifai lo scan →
-</Link>
+            <span className="relative inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/12 bg-black/30">
+              <span className="absolute inset-0 rounded-full bg-white/5 blur-md opacity-0 group-hover:opacity-100 transition" />
+              <span className="text-[16px] leading-none">↓</span>
+            </span>
+          </button>
 
           <div className="mt-4 flex flex-wrap gap-2 text-[12px] text-white/55">
             <span className="select-none cursor-default rounded-full border border-white/10 bg-white/[0.03] px-3 py-2">
@@ -315,7 +321,10 @@ export default function ResultClient() {
         </section>
 
         {/* PALETTE + SALVA/CONDIVIDI */}
-        <section className="mt-5 rounded-3xl border border-white/10 bg-white/[0.03] p-5 sm:p-6">
+        <section
+          id="palette"
+          className="mt-5 rounded-3xl border border-white/10 bg-white/[0.03] p-5 sm:p-6 scroll-mt-24"
+        >
           <div className="flex items-start justify-between gap-3">
             <div>
               <h2 className="text-[18px] font-semibold text-white/90">La tua palette</h2>
@@ -328,13 +337,7 @@ export default function ResultClient() {
               {/* SALVA (sx) */}
               <button
                 onClick={onSavePalette}
-                className="
-                  relative z-10 inline-flex items-center justify-center gap-2
-                  rounded-full border border-white/15 bg-white/[0.03]
-                  px-4 py-2 text-[13px] text-white/90
-                  hover:bg-white/[0.08] hover:border-white/25
-                  transition active:scale-[0.98]
-                "
+                className="relative z-10 inline-flex items-center justify-center gap-2 rounded-full border border-white/15 bg-white/[0.03] px-4 py-2 text-[13px] text-white/90 hover:bg-white/[0.08] hover:border-white/25 transition active:scale-[0.98]"
               >
                 Salva
                 <span className="inline-block h-[6px] w-[6px] rounded-full bg-white/60" />
@@ -343,43 +346,44 @@ export default function ResultClient() {
               {/* CONDIVIDI (dx) */}
               <button
                 onClick={onSharePalette}
-                className="
-                  relative z-10 inline-flex items-center justify-center gap-2
-                  rounded-full bg-white
-                  px-4 py-2 text-[13px] font-semibold text-black
-                  hover:bg-white/90
-                  transition active:scale-[0.98]
-                  shadow-[0_10px_34px_rgba(255,255,255,0.12)]
-                "
+                className="relative z-10 inline-flex items-center justify-center gap-2 rounded-full bg-white px-4 py-2 text-[13px] font-semibold text-black hover:bg-white/90 transition active:scale-[0.98] shadow-[0_10px_34px_rgba(255,255,255,0.12)]"
               >
                 Condividi ✨
               </button>
             </div>
           </div>
 
-          {/* palette row */}
+          {/* ✅ palette row: più visibile + snap + fade */}
           <div className="mt-4 overflow-hidden rounded-2xl border border-white/10 bg-black/20">
-            <div className="flex gap-3 p-4 overflow-x-auto no-scrollbar">
-              {palette.map((c) => (
-                <div
-                  key={`${c.name}-${c.hex}`}
-                  className="min-w-[210px] flex items-center gap-3 rounded-2xl border border-white/10 bg-black/20 px-3 py-3"
-                >
-                  <div className="relative">
-                    <div className="h-12 w-12 rounded-2xl border border-white/10" style={{ background: c.hex }} />
-                    <div
-                      className="absolute -inset-2 rounded-[18px] opacity-30 blur-lg"
-                      style={{ background: c.hex }}
-                      aria-hidden
-                    />
-                  </div>
+            <div className="relative">
+              <div className="pointer-events-none absolute left-0 top-0 h-full w-10 bg-gradient-to-r from-black/80 to-transparent" />
+              <div className="pointer-events-none absolute right-0 top-0 h-full w-10 bg-gradient-to-l from-black/80 to-transparent" />
 
-                  <div className="flex flex-col">
-                    <div className="text-[13px] font-semibold text-white/90">{c.name}</div>
-                    <div className="text-[12px] text-white/55 font-mono">{c.hex}</div>
+              <div className="flex gap-3 p-4 overflow-x-auto no-scrollbar snap-x snap-mandatory">
+                {palette.map((c) => (
+                  <div
+                    key={`${c.name}-${c.hex}`}
+                    className="snap-start min-w-[280px] flex items-center gap-4 rounded-2xl border border-white/10 bg-black/25 px-4 py-4"
+                  >
+                    <div className="relative">
+                      <div className="h-16 w-16 rounded-2xl border border-white/10" style={{ background: c.hex }} />
+                      <div
+                        className="absolute -inset-3 rounded-[24px] opacity-35 blur-xl"
+                        style={{ background: c.hex }}
+                        aria-hidden
+                      />
+                    </div>
+
+                    <div className="flex flex-col">
+                      <div className="text-[15px] font-semibold text-white/90">{c.name}</div>
+                      <div className="text-[12px] text-white/55 font-mono">{c.hex}</div>
+                      <div className="mt-2 text-[12px] text-white/45">
+                        Usa questo come base: “ti veste bene” subito.
+                      </div>
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
           </div>
 
@@ -388,12 +392,20 @@ export default function ResultClient() {
             <div className="text-[12px] text-white/70">
               <span className="text-white/90 font-medium">Vibe pronta per TikTok:</span>
             </div>
-            <div className="mt-2 whitespace-pre-line text-[12px] leading-6 text-white/55">
-              {vibeText}
-            </div>
+            <div className="mt-2 whitespace-pre-line text-[12px] leading-6 text-white/55">{vibeText}</div>
             <div className="mt-2 text-[12px] text-white/45">
               Tip: screenshot palette → post → “che vibe ti dà?” → commenti = algoritmo 🔥
             </div>
+          </div>
+
+          {/* ✅ Link “rifai scan” qui (opportunità, ma NON shop) */}
+          <div className="mt-4 text-center">
+            <Link
+              href="/scan"
+              className="inline-flex items-center justify-center gap-2 rounded-full border border-white/10 bg-white/[0.02] px-4 py-2 text-[12px] text-white/70 hover:bg-white/[0.06] hover:text-white/85 transition"
+            >
+              Vuoi una lettura più precisa? Rifai lo scan <span className="text-white/60">→</span>
+            </Link>
           </div>
         </section>
 
@@ -466,14 +478,10 @@ export default function ResultClient() {
             </button>
 
             {emailStatus === "error" && (
-              <div className="text-[12px] text-rose-200/80">
-                Email non valida o errore invio. Riprova.
-              </div>
+              <div className="text-[12px] text-rose-200/80">Email non valida o errore invio. Riprova.</div>
             )}
 
-            <div className="text-[12px] text-white/45">
-              Niente spam. Solo drop realmente coerenti con la tua palette.
-            </div>
+            <div className="text-[12px] text-white/45">Niente spam. Solo drop coerenti con la tua palette.</div>
           </form>
         </section>
       </main>
@@ -487,7 +495,7 @@ export default function ResultClient() {
         </div>
       )}
 
-      {/* STICKY CTA mobile (NON blocca click sopra) */}
+      {/* ✅ STICKY CTA mobile = UNICO SHOP CTA */}
       <div className="fixed bottom-0 left-0 right-0 z-50 lg:hidden pointer-events-none px-4 pb-[calc(env(safe-area-inset-bottom)+14px)] pt-3 bg-gradient-to-t from-black/90 to-transparent">
         <div className="mx-auto max-w-3xl pointer-events-auto">
           <Link
