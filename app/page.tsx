@@ -1,5 +1,3 @@
-Modifícame la tu 
-
 "use client";
 
 import React, { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
