@@ -46,7 +46,7 @@ function readLastResultFromStorage(): ResultData | null {
     "beorganich_last_palette",
     "lastPalette",
     "lastResult",
-    "beorganich:savedPalette", // ✅ includo anche quella che useremo nel salva
+    "beorganich:savedPalette",
   ];
 
   for (const k of KEYS) {
@@ -98,10 +98,14 @@ export default function ResultClient() {
   const [email, setEmail] = useState("");
   const [consentDrops, setConsentDrops] = useState(true);
   const [emailStatus, setEmailStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
+
   // --- Palette spotlight (premium)
-const paletteScrollRef = useRef<HTMLDivElement | null>(null);
-const [activeIdx, setActiveIdx] = useState(0);
-const [paletteOpen, setPaletteOpen] = useState(false);
+  const paletteScrollRef = useRef<HTMLDivElement | null>(null);
+  const [activeIdx, setActiveIdx] = useState(0);
+
+  // --- Sheet
+  const [paletteOpen, setPaletteOpen] = useState(false);
+
   useEffect(() => {
     const fromStorage = readLastResultFromStorage();
 
@@ -133,36 +137,60 @@ const [paletteOpen, setPaletteOpen] = useState(false);
   }, [toast]);
 
   const palette = data?.palette ?? [];
+
+  // active dot logic
   useEffect(() => {
-  const el = paletteScrollRef.current;
-  if (!el) return;
+    const el = paletteScrollRef.current;
+    if (!el) return;
 
-  const onScroll = () => {
-    const cards = Array.from(el.querySelectorAll("[data-swatch-card]")) as HTMLElement[];
-    if (!cards.length) return;
+    const onScroll = () => {
+      const cards = Array.from(el.querySelectorAll("[data-swatch-card]")) as HTMLElement[];
+      if (!cards.length) return;
 
-    const center = el.scrollLeft + el.clientWidth / 2;
-    let best = 0;
-    let bestDist = Infinity;
+      const center = el.scrollLeft + el.clientWidth / 2;
+      let best = 0;
+      let bestDist = Infinity;
 
-    cards.forEach((card, i) => {
-      const cardCenter = card.offsetLeft + card.offsetWidth / 2;
-      const dist = Math.abs(cardCenter - center);
-      if (dist < bestDist) {
-        bestDist = dist;
-        best = i;
-      }
-    });
+      cards.forEach((card, i) => {
+        const cardCenter = card.offsetLeft + card.offsetWidth / 2;
+        const dist = Math.abs(cardCenter - center);
+        if (dist < bestDist) {
+          bestDist = dist;
+          best = i;
+        }
+      });
 
-    setActiveIdx(best);
-  };
+      setActiveIdx(best);
+    };
 
-  onScroll();
-  el.addEventListener("scroll", onScroll, { passive: true });
-  return () => el.removeEventListener("scroll", onScroll);
-}, [palette.length]);
+    onScroll();
+    el.addEventListener("scroll", onScroll, { passive: true });
+    return () => el.removeEventListener("scroll", onScroll);
+  }, [palette.length]);
 
-  // ProductsCarousel vuole PaletteItem[] => facciamo cast safe
+  // lock body scroll when sheet open (iOS fix)
+  useEffect(() => {
+    if (!paletteOpen) return;
+
+    const prevOverflow = document.body.style.overflow;
+    const prevTouchAction = (document.body.style as any).touchAction;
+
+    document.body.style.overflow = "hidden";
+    (document.body.style as any).touchAction = "none";
+
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setPaletteOpen(false);
+    };
+
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prevOverflow;
+      (document.body.style as any).touchAction = prevTouchAction;
+    };
+  }, [paletteOpen]);
+
+  // ProductsCarousel vuole PaletteItem[] => cast safe
   const paletteForCarousel = useMemo(() => {
     return palette.map((p) => ({ name: p.name, hex: p.hex })) as PaletteItem[];
   }, [palette]);
@@ -273,7 +301,7 @@ const [paletteOpen, setPaletteOpen] = useState(false);
 
   return (
     <div className="min-h-dvh bg-black text-white">
-      {/* NAV — no “RISULTATO”, Home a sinistra, Shop a destra */}
+      {/* NAV */}
       <header className="mx-auto max-w-3xl px-4 pt-5">
         <div className="flex items-center justify-between">
           <div className="text-[12px] tracking-[0.28em] text-white/55">BEORGANICH</div>
@@ -317,13 +345,12 @@ const [paletteOpen, setPaletteOpen] = useState(false);
               "Colori puliti, look ordinati: scegli in un attimo e compra senza ripensamenti."}
           </p>
 
-          {/* Fashion authority close */}
           <div className="mt-6 text-center text-[14px] leading-6 text-white/80">
             <div className="font-medium">Questa palette è la tua firma.</div>
             <div className="text-white/55">Usala come riferimento, sempre.</div>
           </div>
 
-          {/* ✅ CTA premium: porta alla palette (NON shop) */}
+          {/* CTA -> palette */}
           <button
             type="button"
             onClick={scrollToPalette}
@@ -351,7 +378,7 @@ const [paletteOpen, setPaletteOpen] = useState(false);
           </div>
         </section>
 
-        {/* PALETTE + SALVA/CONDIVIDI */}
+        {/* PALETTE */}
         <section
           id="palette"
           className="mt-5 rounded-3xl border border-white/10 bg-white/[0.03] p-5 sm:p-6 scroll-mt-24"
@@ -365,7 +392,6 @@ const [paletteOpen, setPaletteOpen] = useState(false);
             </div>
 
             <div className="flex items-center gap-2">
-              {/* SALVA (sx) */}
               <button
                 onClick={onSavePalette}
                 className="relative z-10 inline-flex items-center justify-center gap-2 rounded-full border border-white/15 bg-white/[0.03] px-4 py-2 text-[13px] text-white/90 hover:bg-white/[0.08] hover:border-white/25 transition active:scale-[0.98]"
@@ -374,7 +400,6 @@ const [paletteOpen, setPaletteOpen] = useState(false);
                 <span className="inline-block h-[6px] w-[6px] rounded-full bg-white/60" />
               </button>
 
-              {/* CONDIVIDI (dx) */}
               <button
                 onClick={onSharePalette}
                 className="relative z-10 inline-flex items-center justify-center gap-2 rounded-full bg-white px-4 py-2 text-[13px] font-semibold text-black hover:bg-white/90 transition active:scale-[0.98] shadow-[0_10px_34px_rgba(255,255,255,0.12)]"
@@ -384,98 +409,88 @@ const [paletteOpen, setPaletteOpen] = useState(false);
             </div>
           </div>
 
-          {/* PALETTE SPOTLIGHT (premium) */}
-<div className="mt-5 rounded-3xl border border-white/10 bg-black/20 overflow-hidden">
-  {/* top row */}
-  <div className="flex items-center justify-between px-4 pt-4">
-    <div className="text-[12px] tracking-[0.22em] text-white/55 uppercase">
-      Palette spotlight
-    </div>
+          {/* PALETTE SPOTLIGHT */}
+          <div className="mt-5 rounded-3xl border border-white/10 bg-black/20 overflow-hidden">
+            <div className="flex items-center justify-between px-4 pt-4">
+              <div className="text-[12px] tracking-[0.22em] text-white/55 uppercase">
+                Palette spotlight
+              </div>
 
-    <button
-      type="button"
-      onClick={() => setPaletteOpen(true)}
-      className="rounded-full border border-white/15 bg-white/[0.03] px-3 py-2 text-[12px] text-white/75 hover:bg-white/[0.06] transition active:scale-[0.99]"
-    >
-      Espandi
-    </button>
-  </div>
-
-  <div className="px-4 -mt-1 pb-2 text-[12px] text-white/45">
-    Scorri → per vedere tutta la palette
-  </div>
-
-  {/* edge fades */}
-  <div className="relative">
-    <div className="pointer-events-none absolute inset-y-0 left-0 w-10 bg-gradient-to-r from-black/60 to-transparent z-10" />
-    <div className="pointer-events-none absolute inset-y-0 right-0 w-10 bg-gradient-to-l from-black/60 to-transparent z-10" />
-
-    {/* scroll area */}
-    <div
-      ref={paletteScrollRef}
-      className="mt-1 flex gap-4 overflow-x-auto px-4 pb-4 no-scrollbar snap-x snap-mandatory"
-    >
-      {palette.map((c, i) => (
-        <button
-          key={`${c.name}-${c.hex}`}
-          data-swatch-card
-          type="button"
-          onClick={() => setPaletteOpen(true)}
-          className="
-            snap-center shrink-0 w-[78%] sm:w-[420px]
-            rounded-3xl border border-white/10 bg-white/[0.03]
-            p-4 text-left transition active:scale-[0.99]
-            hover:bg-white/[0.05]
-          "
-        >
-          <div className="flex items-center gap-4">
-            {/* big swatch */}
-            <div className="relative">
-              <div
-                className="h-16 w-16 rounded-3xl border border-white/10"
-                style={{ background: c.hex }}
-              />
-              <div
-                className="absolute -inset-4 rounded-[28px] opacity-30 blur-2xl"
-                style={{ background: c.hex }}
-                aria-hidden
-              />
+              <button
+                type="button"
+                onClick={() => setPaletteOpen(true)}
+                className="rounded-full border border-white/15 bg-white/[0.03] px-3 py-2 text-[12px] text-white/75 hover:bg-white/[0.06] transition active:scale-[0.99]"
+              >
+                Espandi
+              </button>
             </div>
 
-            <div className="min-w-0">
-              <div className="text-[16px] font-semibold text-white/90 truncate">
-                {c.name}
-              </div>
-              <div className="mt-1 text-[12px] text-white/55 font-mono">
-                {c.hex}
-              </div>
+            <div className="px-4 -mt-1 pb-2 text-[12px] text-white/45">
+              Scorri → per vedere tutta la palette
+            </div>
 
-              <div className="mt-2 text-[12px] leading-5 text-white/60">
-                {i === 0
-                  ? "Base forte: ti fa sembrare subito più ordinato."
-                  : "Usalo nei capi principali per un look coerente."}
+            <div className="relative">
+              <div className="pointer-events-none absolute inset-y-0 left-0 w-10 bg-gradient-to-r from-black/60 to-transparent z-10" />
+              <div className="pointer-events-none absolute inset-y-0 right-0 w-10 bg-gradient-to-l from-black/60 to-transparent z-10" />
+
+              <div
+                ref={paletteScrollRef}
+                className="mt-1 flex gap-4 overflow-x-auto px-4 pb-4 no-scrollbar snap-x snap-mandatory"
+              >
+                {palette.map((c, i) => (
+                  <button
+                    key={`${c.name}-${c.hex}`}
+                    data-swatch-card
+                    type="button"
+                    onClick={() => setPaletteOpen(true)}
+                    className="
+                      snap-center shrink-0 w-[78%] sm:w-[420px]
+                      rounded-3xl border border-white/10 bg-white/[0.03]
+                      p-4 text-left transition active:scale-[0.99]
+                      hover:bg-white/[0.05]
+                    "
+                  >
+                    <div className="flex items-center gap-4">
+                      <div className="relative">
+                        <div
+                          className="h-16 w-16 rounded-3xl border border-white/10"
+                          style={{ background: c.hex }}
+                        />
+                        <div
+                          className="absolute -inset-4 rounded-[28px] opacity-30 blur-2xl"
+                          style={{ background: c.hex }}
+                          aria-hidden
+                        />
+                      </div>
+
+                      <div className="min-w-0">
+                        <div className="text-[16px] font-semibold text-white/90 truncate">{c.name}</div>
+                        <div className="mt-1 text-[12px] text-white/55 font-mono">{c.hex}</div>
+                        <div className="mt-2 text-[12px] leading-5 text-white/60">
+                          {i === 0
+                            ? "Base forte: ti fa sembrare subito più ordinato."
+                            : "Usalo nei capi principali per un look coerente."}
+                        </div>
+                      </div>
+                    </div>
+                  </button>
+                ))}
               </div>
+            </div>
+
+            <div className="flex items-center justify-center gap-2 pb-4">
+              {palette.map((_, i) => (
+                <div
+                  key={i}
+                  className={
+                    i === activeIdx
+                      ? "h-[7px] w-[7px] rounded-full bg-white/70 border border-white/20"
+                      : "h-[7px] w-[7px] rounded-full bg-white/10 border border-white/15"
+                  }
+                />
+              ))}
             </div>
           </div>
-        </button>
-      ))}
-    </div>
-  </div>
-
-  {/* dots */}
-  <div className="flex items-center justify-center gap-2 pb-4">
-    {palette.map((_, i) => (
-      <div
-        key={i}
-        className={
-          i === activeIdx
-            ? "h-[7px] w-[7px] rounded-full bg-white/70 border border-white/20"
-            : "h-[7px] w-[7px] rounded-full bg-white/10 border border-white/15"
-        }
-      />
-    ))}
-  </div>
-</div>
 
           {/* vibe box */}
           <div className="mt-3 rounded-2xl border border-white/10 bg-white/[0.02] p-4">
@@ -488,7 +503,6 @@ const [paletteOpen, setPaletteOpen] = useState(false);
             </div>
           </div>
 
-          {/* ✅ Link “rifai scan” qui (opportunità, ma NON shop) */}
           <div className="mt-4 text-center">
             <Link
               href="/scan"
@@ -499,7 +513,7 @@ const [paletteOpen, setPaletteOpen] = useState(false);
           </div>
         </section>
 
-        {/* ✅ PRODUCT CAROUSEL (match capi cliccabili) */}
+        {/* PRODUCTS */}
         <section className="mt-5">
           <div className="flex items-end justify-between gap-3 px-1">
             <div>
@@ -522,7 +536,7 @@ const [paletteOpen, setPaletteOpen] = useState(false);
           </div>
         </section>
 
-        {/* EMAIL = SALVA + DROP ALERT */}
+        {/* EMAIL */}
         <section className="mt-5 rounded-3xl border border-white/10 bg-white/[0.03] p-5 sm:p-6">
           <div className="text-[16px] font-semibold text-white/90">Salva la palette + Drop alert</div>
           <div className="mt-1 text-[12px] text-white/55">
@@ -575,77 +589,92 @@ const [paletteOpen, setPaletteOpen] = useState(false);
           </form>
         </section>
       </main>
-{/* PALETTE SHEET */}
-{paletteOpen && (
-  <div className="fixed inset-0 z-[80]">
-    {/* backdrop */}
-    <button
-      type="button"
-      onClick={() => setPaletteOpen(false)}
-      className="absolute inset-0 bg-black/60 backdrop-blur-sm"
-      aria-label="Chiudi"
-    />
 
-    {/* sheet */}
-    <div className="absolute left-0 right-0 bottom-0 mx-auto max-w-3xl">
-      <div className="rounded-t-3xl border border-white/10 bg-[#0b0b0b] shadow-[0_-30px_80px_rgba(0,0,0,0.75)]">
-        <div className="flex items-center justify-between px-5 pt-4">
-          <div>
-            <div className="text-[14px] font-semibold text-white/90">La tua palette</div>
-            <div className="mt-1 text-[12px] text-white/55">
-              Screenshot + usa come riferimento quando compri.
-            </div>
-          </div>
-
+      {/* ✅ PALETTE SHEET (FIX: chiudi + non taglia + torna indietro centrato) */}
+      {paletteOpen && (
+        <div className="fixed inset-0 z-[80] flex items-end justify-center px-3">
+          {/* backdrop (tap fuori chiude) */}
           <button
             type="button"
             onClick={() => setPaletteOpen(false)}
-            className="rounded-full border border-white/15 bg-white/[0.03] px-3 py-2 text-[12px] text-white/70 hover:bg-white/[0.06] transition"
-          >
-            Chiudi
-          </button>
-        </div>
+            className="absolute inset-0 z-0 bg-black/60 backdrop-blur-sm"
+            aria-label="Chiudi"
+          />
 
-        <div className="px-5 pb-[calc(env(safe-area-inset-bottom)+18px)] pt-4">
-          <div className="grid gap-3 sm:grid-cols-2">
-            {palette.map((c) => (
-              <div
-                key={`${c.name}-${c.hex}-sheet`}
-                className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 flex items-center gap-4"
-              >
-                <div
-                  className="h-14 w-14 rounded-2xl border border-white/10"
-                  style={{ background: c.hex }}
-                />
-                <div className="min-w-0">
-                  <div className="text-[14px] font-semibold text-white/90 truncate">{c.name}</div>
-                  <div className="text-[12px] text-white/55 font-mono">{c.hex}</div>
+          {/* sheet */}
+          <div className="relative z-10 w-full max-w-3xl">
+            <div className="w-full rounded-t-3xl border border-white/10 bg-[#0b0b0b] shadow-[0_-30px_80px_rgba(0,0,0,0.75)] overflow-hidden">
+              {/* handle iOS */}
+              <div className="flex justify-center pt-2">
+                <div className="h-1.5 w-12 rounded-full bg-white/15" />
+              </div>
+
+              {/* header sticky */}
+              <div className="sticky top-0 z-10 bg-[#0b0b0b]/95 backdrop-blur border-b border-white/10 px-5 py-4">
+                <div className="text-center">
+                  <div className="text-[14px] font-semibold text-white/90">La tua palette</div>
+                  <div className="mt-1 text-[12px] text-white/55">
+                    Screenshot + usa come riferimento quando compri.
+                  </div>
+                </div>
+
+                <div className="mt-3 flex justify-center">
+                  <button
+                    type="button"
+                    onClick={() => setPaletteOpen(false)}
+                    className="w-full max-w-[260px] h-11 rounded-2xl border border-white/15 bg-white/[0.03] text-[14px] text-white/85 hover:bg-white/[0.06] transition active:scale-[0.99]"
+                  >
+                    Torna indietro
+                  </button>
                 </div>
               </div>
-            ))}
-          </div>
 
-          <div className="mt-4 grid gap-2">
-            <button
-              type="button"
-              onClick={onSavePalette}
-              className="h-12 w-full rounded-2xl border border-white/15 bg-white/[0.03] text-[14px] text-white/90 hover:bg-white/[0.06] transition active:scale-[0.99]"
-            >
-              Salva palette
-            </button>
-            <button
-              type="button"
-              onClick={onSharePalette}
-              className="h-12 w-full rounded-2xl bg-white text-black text-[14px] font-semibold hover:bg-white/90 transition active:scale-[0.99]"
-            >
-              Condividi ✨
-            </button>
+              {/* content scroll (NO taglio) */}
+              <div className="px-5 pt-4 pb-[calc(env(safe-area-inset-bottom)+18px)] max-h-[70vh] overflow-y-auto">
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {palette.map((c) => (
+                    <div
+                      key={`${c.name}-${c.hex}-sheet`}
+                      className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 flex items-center gap-4"
+                    >
+                      <div
+                        className="h-14 w-14 rounded-2xl border border-white/10"
+                        style={{ background: c.hex }}
+                      />
+                      <div className="min-w-0">
+                        <div className="text-[14px] font-semibold text-white/90 truncate">{c.name}</div>
+                        <div className="text-[12px] text-white/55 font-mono">{c.hex}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="mt-4 grid gap-2">
+                  <button
+                    type="button"
+                    onClick={onSavePalette}
+                    className="h-12 w-full rounded-2xl border border-white/15 bg-white/[0.03] text-[14px] text-white/90 hover:bg-white/[0.06] transition active:scale-[0.99]"
+                  >
+                    Salva palette
+                  </button>
+                  <button
+                    type="button"
+                    onClick={onSharePalette}
+                    className="h-12 w-full rounded-2xl bg-white text-black text-[14px] font-semibold hover:bg-white/90 transition active:scale-[0.99]"
+                  >
+                    Condividi ✨
+                  </button>
+                </div>
+
+                <div className="mt-3 text-center text-[12px] text-white/40">
+                  Tip: su iPhone puoi chiudere anche tappando fuori.
+                </div>
+              </div>
+            </div>
           </div>
         </div>
-      </div>
-    </div>
-  </div>
-)}
+      )}
+
       {/* TOAST */}
       {toast && (
         <div className="fixed left-1/2 top-5 z-[60] -translate-x-1/2">
@@ -655,7 +684,7 @@ const [paletteOpen, setPaletteOpen] = useState(false);
         </div>
       )}
 
-      {/* ✅ STICKY CTA mobile = UNICO SHOP CTA */}
+      {/* STICKY CTA mobile = UNICO SHOP CTA */}
       <div className="fixed bottom-0 left-0 right-0 z-50 lg:hidden pointer-events-none px-4 pb-[calc(env(safe-area-inset-bottom)+14px)] pt-3 bg-gradient-to-t from-black/90 to-transparent">
         <div className="mx-auto max-w-3xl pointer-events-auto">
           <Link
