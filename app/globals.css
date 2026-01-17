@@ -2644,20 +2644,3 @@ body {
 .beoMarqueeContainer {
   overflow: hidden !important;
 }
-
-/* 5) Sticky CTA: non deve creare “barra” o bloccare click sopra */
-.beoSticky,
-.resultSticky,
-.resultSticky2,
-.resultStickyX {
-  left: 0;
-  right: 0;
-  width: 100%;
-  transform: translateZ(0);
-  -webkit-transform: translateZ(0);
-}
-
-/* 6) iOS: evita “rubber band” strani */
-@supports (-webkit-touch-callout: none) {
-  body { overscroll-behavior-y: none; }
-}
