@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 
 // ✅ usa il tuo componente
@@ -98,7 +98,10 @@ export default function ResultClient() {
   const [email, setEmail] = useState("");
   const [consentDrops, setConsentDrops] = useState(true);
   const [emailStatus, setEmailStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
-
+  // --- Palette spotlight (premium)
+const paletteScrollRef = useRef<HTMLDivElement | null>(null);
+const [activeIdx, setActiveIdx] = useState(0);
+const [paletteOpen, setPaletteOpen] = useState(false);
   useEffect(() => {
     const fromStorage = readLastResultFromStorage();
 
@@ -130,6 +133,34 @@ export default function ResultClient() {
   }, [toast]);
 
   const palette = data?.palette ?? [];
+  useEffect(() => {
+  const el = paletteScrollRef.current;
+  if (!el) return;
+
+  const onScroll = () => {
+    const cards = Array.from(el.querySelectorAll("[data-swatch-card]")) as HTMLElement[];
+    if (!cards.length) return;
+
+    const center = el.scrollLeft + el.clientWidth / 2;
+    let best = 0;
+    let bestDist = Infinity;
+
+    cards.forEach((card, i) => {
+      const cardCenter = card.offsetLeft + card.offsetWidth / 2;
+      const dist = Math.abs(cardCenter - center);
+      if (dist < bestDist) {
+        bestDist = dist;
+        best = i;
+      }
+    });
+
+    setActiveIdx(best);
+  };
+
+  onScroll();
+  el.addEventListener("scroll", onScroll, { passive: true });
+  return () => el.removeEventListener("scroll", onScroll);
+}, [palette.length]);
 
   // ProductsCarousel vuole PaletteItem[] => facciamo cast safe
   const paletteForCarousel = useMemo(() => {
@@ -353,39 +384,98 @@ export default function ResultClient() {
             </div>
           </div>
 
-          {/* ✅ palette row: più visibile + snap + fade */}
-          <div className="mt-4 overflow-hidden rounded-2xl border border-white/10 bg-black/20">
+          {/* PALETTE SPOTLIGHT (premium) */}
+<div className="mt-5 rounded-3xl border border-white/10 bg-black/20 overflow-hidden">
+  {/* top row */}
+  <div className="flex items-center justify-between px-4 pt-4">
+    <div className="text-[12px] tracking-[0.22em] text-white/55 uppercase">
+      Palette spotlight
+    </div>
+
+    <button
+      type="button"
+      onClick={() => setPaletteOpen(true)}
+      className="rounded-full border border-white/15 bg-white/[0.03] px-3 py-2 text-[12px] text-white/75 hover:bg-white/[0.06] transition active:scale-[0.99]"
+    >
+      Espandi
+    </button>
+  </div>
+
+  <div className="px-4 -mt-1 pb-2 text-[12px] text-white/45">
+    Scorri → per vedere tutta la palette
+  </div>
+
+  {/* edge fades */}
+  <div className="relative">
+    <div className="pointer-events-none absolute inset-y-0 left-0 w-10 bg-gradient-to-r from-black/60 to-transparent z-10" />
+    <div className="pointer-events-none absolute inset-y-0 right-0 w-10 bg-gradient-to-l from-black/60 to-transparent z-10" />
+
+    {/* scroll area */}
+    <div
+      ref={paletteScrollRef}
+      className="mt-1 flex gap-4 overflow-x-auto px-4 pb-4 no-scrollbar snap-x snap-mandatory"
+    >
+      {palette.map((c, i) => (
+        <button
+          key={`${c.name}-${c.hex}`}
+          data-swatch-card
+          type="button"
+          onClick={() => setPaletteOpen(true)}
+          className="
+            snap-center shrink-0 w-[78%] sm:w-[420px]
+            rounded-3xl border border-white/10 bg-white/[0.03]
+            p-4 text-left transition active:scale-[0.99]
+            hover:bg-white/[0.05]
+          "
+        >
+          <div className="flex items-center gap-4">
+            {/* big swatch */}
             <div className="relative">
-              <div className="pointer-events-none absolute left-0 top-0 h-full w-10 bg-gradient-to-r from-black/80 to-transparent" />
-              <div className="pointer-events-none absolute right-0 top-0 h-full w-10 bg-gradient-to-l from-black/80 to-transparent" />
+              <div
+                className="h-16 w-16 rounded-3xl border border-white/10"
+                style={{ background: c.hex }}
+              />
+              <div
+                className="absolute -inset-4 rounded-[28px] opacity-30 blur-2xl"
+                style={{ background: c.hex }}
+                aria-hidden
+              />
+            </div>
 
-              <div className="flex gap-3 p-4 overflow-x-auto no-scrollbar snap-x snap-mandatory">
-                {palette.map((c) => (
-                  <div
-                    key={`${c.name}-${c.hex}`}
-                    className="snap-start min-w-[280px] flex items-center gap-4 rounded-2xl border border-white/10 bg-black/25 px-4 py-4"
-                  >
-                    <div className="relative">
-                      <div className="h-16 w-16 rounded-2xl border border-white/10" style={{ background: c.hex }} />
-                      <div
-                        className="absolute -inset-3 rounded-[24px] opacity-35 blur-xl"
-                        style={{ background: c.hex }}
-                        aria-hidden
-                      />
-                    </div>
+            <div className="min-w-0">
+              <div className="text-[16px] font-semibold text-white/90 truncate">
+                {c.name}
+              </div>
+              <div className="mt-1 text-[12px] text-white/55 font-mono">
+                {c.hex}
+              </div>
 
-                    <div className="flex flex-col">
-                      <div className="text-[15px] font-semibold text-white/90">{c.name}</div>
-                      <div className="text-[12px] text-white/55 font-mono">{c.hex}</div>
-                      <div className="mt-2 text-[12px] text-white/45">
-                        Usa questo come base: “ti veste bene” subito.
-                      </div>
-                    </div>
-                  </div>
-                ))}
+              <div className="mt-2 text-[12px] leading-5 text-white/60">
+                {i === 0
+                  ? "Base forte: ti fa sembrare subito più ordinato."
+                  : "Usalo nei capi principali per un look coerente."}
               </div>
             </div>
           </div>
+        </button>
+      ))}
+    </div>
+  </div>
+
+  {/* dots */}
+  <div className="flex items-center justify-center gap-2 pb-4">
+    {palette.map((_, i) => (
+      <div
+        key={i}
+        className={
+          i === activeIdx
+            ? "h-[7px] w-[7px] rounded-full bg-white/70 border border-white/20"
+            : "h-[7px] w-[7px] rounded-full bg-white/10 border border-white/15"
+        }
+      />
+    ))}
+  </div>
+</div>
 
           {/* vibe box */}
           <div className="mt-3 rounded-2xl border border-white/10 bg-white/[0.02] p-4">
@@ -485,7 +575,77 @@ export default function ResultClient() {
           </form>
         </section>
       </main>
+{/* PALETTE SHEET */}
+{paletteOpen && (
+  <div className="fixed inset-0 z-[80]">
+    {/* backdrop */}
+    <button
+      type="button"
+      onClick={() => setPaletteOpen(false)}
+      className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+      aria-label="Chiudi"
+    />
 
+    {/* sheet */}
+    <div className="absolute left-0 right-0 bottom-0 mx-auto max-w-3xl">
+      <div className="rounded-t-3xl border border-white/10 bg-[#0b0b0b] shadow-[0_-30px_80px_rgba(0,0,0,0.75)]">
+        <div className="flex items-center justify-between px-5 pt-4">
+          <div>
+            <div className="text-[14px] font-semibold text-white/90">La tua palette</div>
+            <div className="mt-1 text-[12px] text-white/55">
+              Screenshot + usa come riferimento quando compri.
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setPaletteOpen(false)}
+            className="rounded-full border border-white/15 bg-white/[0.03] px-3 py-2 text-[12px] text-white/70 hover:bg-white/[0.06] transition"
+          >
+            Chiudi
+          </button>
+        </div>
+
+        <div className="px-5 pb-[calc(env(safe-area-inset-bottom)+18px)] pt-4">
+          <div className="grid gap-3 sm:grid-cols-2">
+            {palette.map((c) => (
+              <div
+                key={`${c.name}-${c.hex}-sheet`}
+                className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 flex items-center gap-4"
+              >
+                <div
+                  className="h-14 w-14 rounded-2xl border border-white/10"
+                  style={{ background: c.hex }}
+                />
+                <div className="min-w-0">
+                  <div className="text-[14px] font-semibold text-white/90 truncate">{c.name}</div>
+                  <div className="text-[12px] text-white/55 font-mono">{c.hex}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-4 grid gap-2">
+            <button
+              type="button"
+              onClick={onSavePalette}
+              className="h-12 w-full rounded-2xl border border-white/15 bg-white/[0.03] text-[14px] text-white/90 hover:bg-white/[0.06] transition active:scale-[0.99]"
+            >
+              Salva palette
+            </button>
+            <button
+              type="button"
+              onClick={onSharePalette}
+              className="h-12 w-full rounded-2xl bg-white text-black text-[14px] font-semibold hover:bg-white/90 transition active:scale-[0.99]"
+            >
+              Condividi ✨
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+)}
       {/* TOAST */}
       {toast && (
         <div className="fixed left-1/2 top-5 z-[60] -translate-x-1/2">

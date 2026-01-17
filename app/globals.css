@@ -2607,3 +2607,5 @@ html, body {
   overflow-y: auto;     /* ❗ verticale SEMPRE attivo */
   -webkit-overflow-scrolling: touch;
 }
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
