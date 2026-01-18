@@ -130,7 +130,7 @@ export default function HomePage() {
   return (
     // ✅ FIX scroll orizzontale
     <div className="min-h-dvh bg-black text-white overflow-x-hidden">
-      <header className="pt-6 pb-2 flex flex-col items-center">
+      <section className="flex flex-col items-center text-center px-2 sm:px-0">
   {/* Logo app (simbolo AI) */}
   <div className="h-8 w-8 rounded-full bg-white/90 flex items-center justify-center">
     <span className="text-black text-[13px] font-semibold tracking-tight">AI</span>
@@ -140,7 +140,7 @@ export default function HomePage() {
   <div className="mt-3 text-[11px] tracking-[0.28em] text-white/55 uppercase">
     Personal Color · On-Device
   </div>
-</header>
+</section>
 
       {/* MAIN */}
       <main className="mx-auto max-w-6xl px-4 sm:px-6 pt-7 sm:pt-12 pb-24 lg:pb-16">
@@ -148,23 +148,34 @@ export default function HomePage() {
         <div className="grid gap-6 lg:grid-cols-2 lg:items-start min-w-0">
           {/* COL 1 (mobile: top) */}
           <section className="space-y-4 min-w-0">
-            <div className="inline-flex items-center gap-2">
-              <span className="text-[11px] tracking-[0.28em] text-white/60">PERSONAL COLOR</span>
-              <span className="h-[3px] w-[3px] rounded-full bg-white/30" aria-hidden />
-              <span className="text-[11px] tracking-[0.28em] text-white/35">ON-DEVICE</span>
-            </div>
+            
+            <h1 className="
+  max-w-[22rem]
+  sm:max-w-none
+  text-balance
+  text-[36px]
+  leading-[1.08]
+  font-semibold
+  tracking-tight
+  text-white
+">
+  I colori che ti stanno bene.
+  <br />
+  <span className="text-white/70">In 5 secondi.</span>
+</h1>
 
-            <h1 className="text-balance text-[38px] leading-[1.05] font-semibold tracking-tight sm:text-5xl lg:text-6xl">
-              I colori che ti stanno bene.
-              <br />
-              <span className="text-white/75">In 5 secondi.</span>
-            </h1>
-
-            <p className="max-w-xl text-[15px] leading-7 text-white/70">
-              Analisi discreta del volto (senza filtri) → palette personale → capi coerenti.
-              <br />
-              Più sicurezza quando compri. Meno resi. Più “wow”.
-            </p>
+            <p className="
+  mt-3
+  max-w-[20rem]
+  sm:max-w-xl
+  text-[14px]
+  leading-6
+  text-white/65
+">
+  Analisi discreta del volto (senza filtri) → palette personale → capi coerenti.
+  <br className="hidden sm:block" />
+  Più sicurezza quando compri. Meno resi. Più “wow”.
+</p>
 
             {/* CTA */}
             <div className="grid gap-2">
