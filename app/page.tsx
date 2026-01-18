@@ -131,24 +131,18 @@ export default function HomePage() {
     // ✅ FIX scroll orizzontale
     <div className="min-h-dvh bg-black text-white overflow-x-hidden">
       {/* HEADER */}
-      <header className="mx-auto flex max-w-6xl items-center justify-between px-4 sm:px-6 pt-4 sm:pt-6">
-        <Link href="/" className="group flex items-center gap-3">
-          <div className="relative h-10 w-40 sm:h-12 sm:w-52">
-            <Image
-              src="/logo/logo-beorganich.png"
-              alt="Beorganich"
-              fill
-              priority
-              className="object-contain opacity-90 transition duration-300 group-hover:opacity-100 drop-shadow-[0_10px_28px_rgba(255,255,255,0.07)]"
-            />
-          </div>
+      <header className="mx-auto max-w-6xl px-4 sm:px-6 pt-5 sm:pt-7">
+  <div className="flex items-center justify-center">
+    <div className="rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-[11px] tracking-[0.28em] text-white/65">
+      PRIVATE PERSONAL COLOR • ON-DEVICE
+    </div>
+  </div>
 
-          <div className="hidden sm:block">
-            <div className="text-[11px] tracking-[0.22em] text-white/55 transition duration-300 group-hover:text-white/70">
-              ORGANIC COTTON • PERSONAL COLOR
-            </div>
-          </div>
-        </Link>
+  <div className="mt-3 text-center">
+    <div className="text-[12px] text-white/55">
+      La tua palette. Il tuo <span className="text-white/75 font-medium">uniform</span>.
+    </div>
+  </div>
 
         {/* SOLO SHOP */}
         <Link
