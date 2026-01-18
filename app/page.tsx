@@ -166,14 +166,11 @@ export default function HomePage() {
 
       {/* MAIN */}
       
-     <main className="mx-auto max-w-6xl px-4 sm:px-6 pt-4 sm:pt-12 pb-4 sm:pb-10">
-  <div className="min-h-[calc(100svh-90px)] sm:min-h-0 flex flex-col justify-between gap-3 sm:block sm:gap-0">
-    {/* TUTTO IL CONTENUTO CHE ORA HAI DENTRO MAIN */}
-  </div>
+      <main className="mx-auto max-w-6xl px-4 sm:px-6 pt-4 sm:pt-12 pb-4 sm:pb-10">
         {/* Mobile-first: CTA subito, poi testo corto, poi preview */}
-        <div className="grid gap-3 sm:gap-6 lg:grid-cols-2 lg:items-start">
+        <div className="grid gap-6 lg:grid-cols-2 lg:items-start">
           {/* COL 1 (mobile: top) */}
-          <section className="space-y-3 sm:space-y-4">
+          <section className="space-y-4">
             <div className="inline-flex items-center gap-2">
               <span className="text-[11px] tracking-[0.28em] text-white/60">PERSONAL COLOR</span>
               <span className="h-[3px] w-[3px] rounded-full bg-white/30" aria-hidden />
