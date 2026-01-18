@@ -167,9 +167,9 @@ export default function HomePage() {
       {/* MAIN */}
       <main className="mx-auto max-w-6xl px-4 sm:px-6 pt-7 sm:pt-12 pb-24 lg:pb-16">
         {/* Mobile-first: CTA subito, poi testo corto, poi preview */}
-        <div className="grid gap-6 lg:grid-cols-2 lg:items-start">
+        <div className="grid gap-6 lg:grid-cols-2 lg:items-start min-w-0">
           {/* COL 1 (mobile: top) */}
-          <section className="space-y-4">
+          <section className="space-y-4 min-w-0">
             <div className="inline-flex items-center gap-2">
               <span className="text-[11px] tracking-[0.28em] text-white/60">PERSONAL COLOR</span>
               <span className="h-[3px] w-[3px] rounded-full bg-white/30" aria-hidden />
@@ -227,7 +227,7 @@ export default function HomePage() {
               </Link>
 
               {/* Perché funziona (mobile super compatto) */}
-              <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-4">
+              <div className="w-full max-w-full rounded-3xl border border-white/10 bg-white/[0.03] p-4 min-w-0">
                 <div className="text-[14px] font-semibold text-white/90">Perché funziona</div>
                 <ul className="mt-2 space-y-2 text-[13px] text-white/70">
                   <li className="flex gap-2">
@@ -270,13 +270,12 @@ export default function HomePage() {
           </section>
 
           {/* COL 2 */}
-          <section className="space-y-3">
+          <section className="space-y-3 min-w-0">
             <div className="relative">
               <div className="beoAurora" aria-hidden />
-
-              <div
-                ref={tiltRef}
-                className="rounded-3xl border border-white/10 bg-white/[0.03] p-4 sm:p-5 overflow-hidden"
+                <div
+  ref={tiltRef}
+  className="w-full max-w-full min-w-0 rounded-3xl border border-white/10 bg-white/[0.03] p-4 sm:p-5 overflow-hidden"
                 style={{
                   ...tiltStyle,
                   transition: tiltEnabled ? "transform 140ms ease" : undefined,
