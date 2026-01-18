@@ -191,16 +191,17 @@ export default function HomePage() {
             {/* CTA */}
             <div className="grid gap-2">
               <Link
-                href="/scan"
-                className="
-                  group relative flex items-center justify-center gap-3
-                  overflow-hidden rounded-2xl
-                  bg-white px-6 py-4
-                  text-[15px] font-semibold tracking-wide text-black
-                  transition active:scale-[0.99]
-                  shadow-[0_14px_44px_rgba(255,255,255,0.16)]
-                "
-              >
+  href="/scan"
+  className="
+    hidden sm:flex
+    group relative items-center justify-center gap-3
+    overflow-hidden rounded-2xl
+    bg-white px-6 py-4
+    text-[15px] font-semibold tracking-wide text-black
+    transition active:scale-[0.99]
+    shadow-[0_14px_44px_rgba(255,255,255,0.16)]
+  "
+>
                 Effettua lo scan
                 <StatusPill
                   status={cameraStatus}
