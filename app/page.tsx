@@ -130,33 +130,17 @@ export default function HomePage() {
   return (
     // ✅ FIX scroll orizzontale
     <div className="min-h-dvh bg-black text-white overflow-x-hidden">
-      {/* HEADER */}
-      <header className="mx-auto max-w-6xl px-4 sm:px-6 pt-5 sm:pt-7">
-  <div className="flex items-center justify-center">
-    <div className="rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-[11px] tracking-[0.28em] text-white/65">
-      PRIVATE PERSONAL COLOR • ON-DEVICE
-    </div>
+      <header className="pt-6 pb-2 flex flex-col items-center">
+  {/* Logo app (simbolo AI) */}
+  <div className="h-8 w-8 rounded-full bg-white/90 flex items-center justify-center">
+    <span className="text-black text-[13px] font-semibold tracking-tight">AI</span>
   </div>
 
-  <div className="mt-3 text-center">
-    <div className="text-[12px] text-white/55">
-      La tua palette. Il tuo <span className="text-white/75 font-medium">uniform</span>.
-    </div>
+  {/* Micro label */}
+  <div className="mt-3 text-[11px] tracking-[0.28em] text-white/55 uppercase">
+    Personal Color · On-Device
   </div>
-
-        {/* SOLO SHOP */}
-        <Link
-          href="/shop"
-          className="
-            rounded-full bg-white px-4 py-2
-            text-[13px] font-semibold tracking-wide text-black
-            transition-all duration-300 hover:bg-white/90 active:scale-[0.97]
-            shadow-[0_10px_30px_rgba(255,255,255,0.15)]
-          "
-        >
-          Shop
-        </Link>
-      </header>
+</header>
 
       {/* MAIN */}
       <main className="mx-auto max-w-6xl px-4 sm:px-6 pt-7 sm:pt-12 pb-24 lg:pb-16">
