@@ -220,11 +220,11 @@ export default function HomePage() {
               </Link>
 
               <Link
-                href="/scan?upload=1"
-                className="block text-center text-[12px] text-white/60 underline underline-offset-4 hover:text-white/85 transition"
-              >
-                Oppure carica una foto
-              </Link>
+  href="/scan?upload=1"
+  className="hidden sm:block text-center text-[12px] text-white/60 underline underline-offset-4 hover:text-white/85 transition"
+>
+  Oppure carica una foto
+</Link>
 
               {/* Perché funziona (mobile super compatto) */}
               <div className="w-full max-w-full rounded-3xl border border-white/10 bg-white/[0.03] p-4 min-w-0">
@@ -290,9 +290,9 @@ export default function HomePage() {
                     <div className="text-[15px] font-semibold text-white/90">Palette preview</div>
                     <div className="text-[12px] text-white/50">Esempio scorrevole</div>
                   </div>
-                  <span className="select-none cursor-default rounded-full border border-white/10 bg-white/[0.03] px-3 py-2 text-[12px] text-white/70">
-                    Preview
-                  </span>
+                  <span className="hidden sm:inline-flex select-none cursor-default rounded-full border border-white/10 bg-white/[0.03] px-3 py-2 text-[12px] text-white/70">
+  Preview
+</span>
                 </div>
 
                 <div className="mt-3 overflow-hidden rounded-2xl border border-white/10 bg-black/20">
