@@ -165,8 +165,7 @@ export default function HomePage() {
       </header>
 
       {/* MAIN */}
-      
-      <main className="mx-auto max-w-6xl px-4 sm:px-6 pt-4 sm:pt-12 pb-4 sm:pb-10">
+      <main className="mx-auto max-w-6xl px-4 sm:px-6 pt-7 sm:pt-12 pb-24 lg:pb-16">
         {/* Mobile-first: CTA subito, poi testo corto, poi preview */}
         <div className="grid gap-6 lg:grid-cols-2 lg:items-start">
           {/* COL 1 (mobile: top) */}
