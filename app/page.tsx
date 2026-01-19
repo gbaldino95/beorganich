@@ -131,7 +131,7 @@ export default function HomePage() {
   return (
     // ✅ FIX scroll orizzontale
     <div className="min-h-dvh bg-black text-white overflow-x-hidden">
-  <section className="flex flex-col items-center text-center px-2 sm:px-0 pt-3 sm:pt-5">
+  <section className="flex flex-col items-center text-center px-2 sm:px-0 pt-4 sm:pt-6">
     <HomeLogo />
   </section>
 

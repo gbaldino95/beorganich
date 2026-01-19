@@ -15,9 +15,9 @@ export default function HomeLogo() {
       </div>
 
       {/* Micro label premium */}
-      <div className="mt-1 text-[10.5px] uppercase text-white/50 tracking-[0.16em] sm:text-[11px] sm:tracking-[0.24em]">
+      <div className="mt-[2px] text-[10.5px] tracking-[0.18em] text-white/50 uppercase">
   PRIVATE PERSONAL COLOR · ON-DEVICE
-      </div>
+</div>
     </div>
   );
 }
