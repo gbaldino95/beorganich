@@ -6,7 +6,6 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { trackEvent } from "@/app/lib/telemetry";
 import { type PaletteItem, makePaletteFromSamples } from "@/app/lib/paletteLogic";
-import HomeLogo from "@/app/components/HomeLogo";
 
 // ✅ MediaPipe on-device engine
 import {
@@ -24,7 +23,19 @@ declare global {
     ttq?: any;
   }
 }
+function explainCamError(err: any) {
+  const name = String(err?.name || "");
+  const msg = String(err?.message || "");
 
+  console.error("getUserMedia ERROR:", { name, msg, err });
+
+  if (name === "NotAllowedError" || name === "SecurityError") return "NOT_ALLOWED";
+  if (name === "NotFoundError") return "NO_CAMERA";
+  if (name === "NotReadableError") return "BUSY";
+  if (name === "OverconstrainedError") return "CONSTRAINTS";
+
+  return `RAW:${name}:${msg}`;
+}
 function track(event: string, data: Record<string, any> = {}) {
   if (typeof window !== "undefined" && window.ttq) {
     window.ttq.track(event, data);
@@ -1202,16 +1213,7 @@ trackEvent(
   const percent = Math.round(quality * 100);
 
   return (
-  <div className="min-h-dvh bg-black text-white pb-28">
-    <div className="pt-10 sm:pt-12 flex justify-center pointer-events-none">
-  <HomeLogo />
-</div>
-      {/* HEADER – logo centrato */}
-  <header className="pt-10 pb-6">
-    <div className="mx-auto max-w-md px-4 flex items-center justify-center">
-      <HomeLogo />
-    </div>
-  </header>
+    <div className="min-h-dvh bg-black text-white">
       {/* Hidden upload */}
       <input
         ref={fileInputRef}
@@ -1381,7 +1383,7 @@ trackEvent(
       </main>
 
       {/* Sticky bottom */}
-      <div className="fixed bottom-0 left-0 right-0 z-[60] pointer-events-none px-5 pb-[calc(env(safe-area-inset-bottom)+16px)] pt-4 bg-gradient-to-t from-black/90 to-transparent">
+      <div className="fixed bottom-0 left-0 right-0 px-5 pb-[calc(env(safe-area-inset-bottom)+16px)] pt-4 bg-gradient-to-t from-black/90 to-transparent">
         <div className="mx-auto flex max-w-md flex-col gap-3">
           <button
             onClick={startRitual}
