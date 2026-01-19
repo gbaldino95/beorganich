@@ -131,18 +131,9 @@ export default function HomePage() {
   return (
     // ✅ FIX scroll orizzontale
     <div className="min-h-dvh bg-black text-white overflow-x-hidden">
-      <HomeLogo />
-      <section className="flex flex-col items-center text-center px-2 sm:px-0">
-  {/* Logo app (simbolo AI) */}
-  <div className="h-8 w-8 rounded-full bg-white/90 flex items-center justify-center">
-    <span className="text-black text-[13px] font-semibold tracking-tight">AI</span>
-  </div>
-
-  {/* Micro label */}
-  <div className="mt-3 text-[11px] tracking-[0.28em] text-white/55 uppercase">
-    Personal Color · On-Device
-  </div>
-</section>
+  <section className="flex flex-col items-center text-center px-2 sm:px-0 pt-10 sm:pt-12">
+    <HomeLogo />
+  </section>
 
       {/* MAIN */}
       <main className="mx-auto max-w-6xl px-4 sm:px-6 pt-7 sm:pt-12 pb-24 lg:pb-16">

@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { trackEvent } from "@/app/lib/telemetry";
 import { type PaletteItem, makePaletteFromSamples } from "@/app/lib/paletteLogic";
+import HomeLogo from "@/app/components/HomeLogo";
 
 // ✅ MediaPipe on-device engine
 import {
@@ -1202,6 +1203,12 @@ trackEvent(
 
   return (
   <div className="min-h-dvh bg-black text-white pb-28">
+      {/* HEADER – logo centrato */}
+  <header className="pt-10 pb-6">
+    <div className="mx-auto max-w-md px-4 flex items-center justify-center">
+      <HomeLogo />
+    </div>
+  </header>
       {/* Hidden upload */}
       <input
         ref={fileInputRef}
@@ -1372,7 +1379,7 @@ trackEvent(
 
       {/* Sticky bottom */}
       <div className="fixed bottom-0 left-0 right-0 z-[60] pointer-events-none px-5 pb-[calc(env(safe-area-inset-bottom)+16px)] pt-4 bg-gradient-to-t from-black/90 to-transparent">
-        <div className="mx-auto flex max-w-md flex-col gap-3 pointer-events-auto">
+        <div className="mx-auto flex max-w-md flex-col gap-3">
           <button
             onClick={startRitual}
             className="h-14 w-full rounded-2xl bg-white text-black text-[15px] font-medium tracking-wide hover:bg-white/90 transition active:scale-[0.99]"
