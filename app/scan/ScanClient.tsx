@@ -1203,6 +1203,9 @@ trackEvent(
 
   return (
   <div className="min-h-dvh bg-black text-white pb-28">
+    <div className="pt-10 sm:pt-12 flex justify-center pointer-events-none">
+  <HomeLogo />
+</div>
       {/* HEADER – logo centrato */}
   <header className="pt-10 pb-6">
     <div className="mx-auto max-w-md px-4 flex items-center justify-center">
