@@ -4,6 +4,7 @@ import React, { useEffect, useMemo, useRef, useState, type CSSProperties } from 
 import Link from "next/link";
 import Image from "next/image";
 import StatusPill from "./components/StatusPill";
+import HomeLogo from "@/app/components/HomeLogo";
 
 type CamStatus = "idle" | "checking" | "ready" | "locked";
 
@@ -130,6 +131,7 @@ export default function HomePage() {
   return (
     // ✅ FIX scroll orizzontale
     <div className="min-h-dvh bg-black text-white overflow-x-hidden">
+      <HomeLogo />
       <section className="flex flex-col items-center text-center px-2 sm:px-0">
   {/* Logo app (simbolo AI) */}
   <div className="h-8 w-8 rounded-full bg-white/90 flex items-center justify-center">
@@ -217,27 +219,32 @@ export default function HomePage() {
 
               {/* Perché funziona (mobile super compatto) */}
               <div className="w-full max-w-full rounded-3xl border border-white/10 bg-white/[0.03] p-4 min-w-0">
-                <div className="text-[14px] font-semibold text-white/90">Perché funziona</div>
-                <ul className="mt-2 space-y-2 text-[13px] text-white/70">
-                  <li className="flex gap-2">
-                    <span className="mt-[7px] h-[4px] w-[4px] rounded-full bg-white/40" />
-                    <span>
-                      Evidenzia i colori che <span className="text-white/90 font-medium">ti illuminano</span>
-                    </span>
-                  </li>
-                  <li className="flex gap-2">
-                    <span className="mt-[7px] h-[4px] w-[4px] rounded-full bg-white/40" />
-                    <span>
-                      Ti guida su capi <span className="text-white/90 font-medium">coerenti con la palette</span>
-                    </span>
-                  </li>
-                  <li className="flex gap-2">
-                    <span className="mt-[7px] h-[4px] w-[4px] rounded-full bg-white/40" />
-                    <span>
-                      Nessuna foto salvata: <span className="text-white/90 font-medium">calcolo sul dispositivo</span>
-                    </span>
-                  </li>
-                </ul>
+                <div className="text-[15px] font-semibold text-white/90">Perché funziona</div>
+                <ul className="mt-3 space-y-3 text-[14px] leading-6">
+  <li className="flex items-start gap-3">
+    <span className="mt-[8px] h-[7px] w-[7px] shrink-0 rounded-full bg-white/35" />
+    <span className="text-white/70">
+      Evidenzia i colori che{" "}
+      <span className="text-white/90 font-semibold">ti illuminano</span>
+    </span>
+  </li>
+
+  <li className="flex items-start gap-3">
+    <span className="mt-[8px] h-[7px] w-[7px] shrink-0 rounded-full bg-white/35" />
+    <span className="text-white/70">
+      Ti guida su capi{" "}
+      <span className="text-white/90 font-semibold">coerenti con la palette</span>
+    </span>
+  </li>
+
+  <li className="flex items-start gap-3">
+    <span className="mt-[8px] h-[7px] w-[7px] shrink-0 rounded-full bg-white/35" />
+    <span className="text-white/70">
+      Nessuna foto salvata:{" "}
+      <span className="text-white/90 font-semibold">calcolo sul dispositivo</span>
+    </span>
+  </li>
+</ul>
 
                 <div className="mt-3 flex flex-wrap gap-2">
                   <span className="select-none cursor-default rounded-full border border-white/10 bg-white/[0.03] px-3 py-2 text-[12px] text-white/70">
