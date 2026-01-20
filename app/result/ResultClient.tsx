@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import html2canvas from "html2canvas";
 import Link from "next/link";
 
 // ✅ usa il tuo componente
@@ -16,7 +17,51 @@ type ResultData = {
   subcopy?: string;
   palette?: PaletteColor[];
 };
+const onSavePaletteToGallery = async () => {
+  const el = document.getElementById("palette-export");
+  if (!el) {
+    alert("Palette non trovata");
+    return;
+  }
 
+  try {
+    const html2canvas = (await import("html2canvas")).default;
+
+    const canvas = await html2canvas(el, {
+      backgroundColor: "#0b0b0b",
+      scale: 2,
+    });
+
+    const blob = await new Promise<Blob | null>((resolve) =>
+      canvas.toBlob(resolve, "image/png")
+    );
+
+    if (!blob) return;
+
+    const file = new File([blob], "UNYFORM_palette.png", {
+      type: "image/png",
+    });
+
+    // 👉 Mobile: salva in galleria tramite share sheet
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      await navigator.share({
+        files: [file],
+        title: "La mia palette UNYFORM",
+      });
+    } else {
+      // 👉 Desktop fallback: download
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "UNYFORM_palette.png";
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+  } catch (e) {
+    console.error(e);
+    alert("Errore nel salvataggio");
+  }
+};
 function cx(...parts: Array<string | false | undefined | null>) {
   return parts.filter(Boolean).join(" ");
 }
@@ -79,11 +124,11 @@ function readLastResultFromStorage(): ResultData | null {
 }
 
 function buildVibeText(styleName?: string) {
-  const vibe = styleName ? `La mia vibe: ${styleName} ✨` : "La mia vibe: Beorganich ✨";
+  const vibe = styleName ? `La mia vibe: ${styleName} ✨` : "La mia vibe ✨";
   return (
     `${vibe}\n` +
     `Che vibe ti dà? Commenta 1 parola 👇\n` +
-    `#beorganich #personalcolor #outfitcheck #capsulewardrobe #stylehack`
+    `#personalcolor #outfitcheck #capsulewardrobe #stylehack`
   );
 }
 
@@ -128,7 +173,123 @@ export default function ResultClient() {
 
     setData(fromStorage ?? fallback);
   }, []);
+const onSavePaletteToGallery = async () => {
+  try {
+    if (!palette?.length) {
+      setToast("Palette vuota 😕");
+      return;
+    }
 
+    // Canvas hi-res
+    const W = 1200;
+    const P = 72;
+    const cardH = 160;
+    const gap = 18;
+
+    const canvas = document.createElement("canvas");
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("NO_CTX");
+
+    const H = P * 2 + 220 + palette.length * (cardH + gap);
+    canvas.width = W;
+    canvas.height = H;
+
+    // Background
+    ctx.fillStyle = "#0b0b0b";
+    ctx.fillRect(0, 0, W, H);
+
+    // Title
+    ctx.fillStyle = "rgba(255,255,255,0.92)";
+    ctx.font = "700 54px system-ui, -apple-system, Segoe UI, Roboto";
+    ctx.fillText(data?.styleName ?? "La tua palette", P, P + 60);
+
+    // Subtitle
+    ctx.fillStyle = "rgba(255,255,255,0.55)";
+    ctx.font = "400 28px system-ui, -apple-system, Segoe UI, Roboto";
+    ctx.fillText("UNYFORM · personal color", P, P + 112);
+
+    // Cards
+    let y = P + 160;
+    palette.forEach((c) => {
+      // card
+      ctx.fillStyle = "rgba(255,255,255,0.06)";
+      roundRect(ctx, P, y, W - P * 2, cardH, 28);
+      ctx.fill();
+
+      // swatch
+      ctx.fillStyle = c.hex;
+      roundRect(ctx, P + 22, y + 22, 116, 116, 26);
+      ctx.fill();
+
+      // text
+      ctx.fillStyle = "rgba(255,255,255,0.92)";
+      ctx.font = "700 34px system-ui, -apple-system, Segoe UI, Roboto";
+      ctx.fillText(c.name, P + 160, y + 70);
+
+      ctx.fillStyle = "rgba(255,255,255,0.55)";
+      ctx.font = "500 26px ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas";
+      ctx.fillText(c.hex.toUpperCase(), P + 160, y + 110);
+
+      y += cardH + gap;
+    });
+
+    // Make file
+    const blob: Blob = await new Promise((resolve, reject) => {
+      canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("NO_BLOB"))), "image/png", 1);
+    });
+
+    const file = new File([blob], "unyform-palette.png", { type: "image/png" });
+
+    // ✅ Best: Share sheet -> Save to Photos/Gallery
+    const canShareFiles =
+      typeof navigator !== "undefined" &&
+      "canShare" in navigator &&
+      (navigator as any).canShare({ files: [file] });
+
+    if (canShareFiles && "share" in navigator) {
+      await (navigator as any).share({
+        files: [file],
+        title: "Palette UNYFORM",
+        text: "Salva la tua palette",
+      });
+      setToast("Apri Condividi → Salva immagine ✅");
+      return;
+    }
+
+    // Fallback: download (poi “Salva in Foto” da file su iOS/Android)
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "unyform-palette.png";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+
+    setToast("Scaricata ✅ Apri file e salva in Foto");
+  } catch {
+    setToast("Errore salvataggio 😕");
+  }
+};
+
+// helper per bordi arrotondati
+function roundRect(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  r: number
+) {
+  const radius = Math.min(r, w / 2, h / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + radius, y);
+  ctx.arcTo(x + w, y, x + w, y + h, radius);
+  ctx.arcTo(x + w, y + h, x, y + h, radius);
+  ctx.arcTo(x, y + h, x, y, radius);
+  ctx.arcTo(x, y, x + w, y, radius);
+  ctx.closePath();
+}
   // auto-hide toast
   useEffect(() => {
     if (!toast) return;
@@ -301,27 +462,39 @@ export default function ResultClient() {
 
   return (
     <div className="min-h-dvh bg-black text-white">
-      {/* NAV */}
-      <header className="mx-auto max-w-3xl px-4 pt-5">
-        <div className="flex items-center justify-between">
-          <div className="text-[12px] tracking-[0.28em] text-white/55">BEORGANICH</div>
+    {/* NAV — Home premium (Results) */}
+<header className="mx-auto max-w-3xl px-4 pt-4">
+  <div className="flex justify-end">
+    <Link
+      href="/"
+      className="
+        group inline-flex items-center gap-2
+        rounded-full border border-white/15
+        bg-white/[0.02]
+        px-4 py-2
+        text-[13px] font-medium text-white/75
+        backdrop-blur
+        transition-all duration-300
+        hover:bg-white/[0.06]
+        hover:text-white
+        active:scale-[0.97]
+      "
+    >
+      <span
+        className="
+          flex h-6 w-6 items-center justify-center
+          rounded-full border border-white/15
+          text-[14px] leading-none
+          transition group-hover:border-white/30
+        "
+      >
+        ←
+      </span>
 
-          <div className="flex items-center gap-2">
-            <Link
-              href="/"
-              className="rounded-full border border-white/15 bg-white/[0.03] px-4 py-2 text-[13px] text-white/80 hover:bg-white/[0.06] transition"
-            >
-              Home
-            </Link>
-            <Link
-              href="/shop"
-              className="rounded-full bg-white px-4 py-2 text-[13px] font-semibold text-black hover:bg-white/90 transition"
-            >
-              Shop
-            </Link>
-          </div>
-        </div>
-      </header>
+      Home
+    </Link>
+  </div>
+</header>
 
       <main className="mx-auto max-w-3xl px-4 pb-28 pt-6">
         {/* HERO */}
@@ -380,7 +553,7 @@ export default function ResultClient() {
 
         {/* PALETTE */}
         <section
-          id="palette"
+          id="palette-export"
           className="mt-5 rounded-3xl border border-white/10 bg-white/[0.03] p-5 sm:p-6 scroll-mt-24"
         >
           <div className="flex items-start justify-between gap-3">
@@ -393,7 +566,7 @@ export default function ResultClient() {
 
             <div className="flex items-center gap-2">
               <button
-                onClick={onSavePalette}
+                onClick={onSavePaletteToGallery}
                 className="relative z-10 inline-flex items-center justify-center gap-2 rounded-full border border-white/15 bg-white/[0.03] px-4 py-2 text-[13px] text-white/90 hover:bg-white/[0.08] hover:border-white/25 transition active:scale-[0.98]"
               >
                 Salva

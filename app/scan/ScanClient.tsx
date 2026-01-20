@@ -204,7 +204,8 @@ async function compressImageToWebP(file: File, opts: { maxSide?: number; quality
     try {
       const img = new Image();
       img.src = url;
-      await img.decode();
+      // ✅ IMPORTANT: aspetta che l’immagine sia davvero decodificata (Safari/iOS)
+await img.decode().catch(() => {});
       w = img.naturalWidth;
       h = img.naturalHeight;
       drawSource = img;
@@ -1227,22 +1228,7 @@ trackEvent(
         }}
       />
 
-      {/* Header */}
-      <header className="mx-auto flex max-w-6xl items-center justify-between px-5 pt-6">
-        <div className="flex items-center gap-3">
-          <div className="text-[12px] tracking-[0.22em] text-white/65">{BRAND}</div>
-          <span className="pill subtle">SCAN</span>
-        </div>
 
-        <div className="flex items-center gap-2">
-          <a className="pillButton" href={SHOP_URL} target="_blank" rel="noreferrer">
-            Shop
-          </a>
-          <Link className="pillButton subtle" href="/">
-            Home
-          </Link>
-        </div>
-      </header>
 
       {/* Content */}
       <main className="mx-auto max-w-6xl px-5 pb-28 pt-10">

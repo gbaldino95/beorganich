@@ -154,14 +154,13 @@ export async function getImageSegmenter(): Promise<ImageSegmenter> {
   return _segmenterPromise;
 }
 
-/** Detect face landmarks on IMAGE (canvas/image/bitmap) */
-/** Detect face landmarks on IMAGE (canvas/image) — robust (no ImageBitmap) */
+/** Detect face landmarks on IMAGE (canvas/image/bitmap) — ultra robust */
 export async function detectFaceOnImage(
   input: HTMLCanvasElement | HTMLImageElement | ImageBitmap
 ) {
   const lm = await getFaceLandmarker("IMAGE");
 
-  // ---- guard: input deve avere dimensioni valide ----
+  // --- dimensioni affidabili ---
   const w =
     input instanceof HTMLImageElement
       ? input.naturalWidth
@@ -174,33 +173,13 @@ export async function detectFaceOnImage(
 
   if (!w || !h) return null;
 
-  // ---- try 1: detect diretto (quando supportato) ----
-  try {
-    const res = lm.detect(input as any) as FaceLandmarkerResult;
-    const face = res.faceLandmarks?.[0];
-    if (!face?.length) return null;
-    return face as Landmark[];
-  } catch {
-    // continua
-  }
-
-  // ---- try 2: se è un canvas, ripassa il canvas stesso (spesso più stabile) ----
-  try {
-    if (input instanceof HTMLCanvasElement) {
-      const res = lm.detect(input as any) as FaceLandmarkerResult;
-      const face = res.faceLandmarks?.[0];
-      if (!face?.length) return null;
-      return face as Landmark[];
-    }
-  } catch {
-    // continua
-  }
-
-  // ---- try 3: fallback universale: ImageData ----
+  // ✅ STRATEGIA: normalizziamo SEMPRE su canvas, poi detect(canvas).
+  // È la via più stabile (Safari / iOS / ImageBitmap / CORS / ImageData).
   try {
     const off = document.createElement("canvas");
     off.width = w;
     off.height = h;
+
     const ctx = off.getContext("2d", { willReadFrequently: true });
     if (!ctx) return null;
 
@@ -208,23 +187,19 @@ export async function detectFaceOnImage(
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, w, h);
 
-    if (input instanceof HTMLImageElement) {
-      ctx.drawImage(input, 0, 0, w, h);
-    } else {
-      // canvas o bitmap -> disegniamo comunque
-      ctx.drawImage(input as any, 0, 0, w, h);
-    }
+    // draw
+    ctx.drawImage(input as any, 0, 0, w, h);
 
-    const imgData = ctx.getImageData(0, 0, w, h);
-    const res = lm.detect(imgData as any) as FaceLandmarkerResult;
+    // detect su canvas (stabile)
+    const res = lm.detect(off as any) as FaceLandmarkerResult;
     const face = res.faceLandmarks?.[0];
     if (!face?.length) return null;
+
     return face as Landmark[];
   } catch {
     return null;
   }
 }
-
 /** Detect face landmarks on VIDEO */
 
 export async function detectFaceOnVideo(video: HTMLVideoElement, timestampMs: number) {
