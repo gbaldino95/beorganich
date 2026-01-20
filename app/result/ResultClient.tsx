@@ -47,6 +47,7 @@ function isValidEmail(email: string) {
  */
 function readLastResultFromStorage(): ResultData | null {
   const KEYS = [
+    "beorganich:lastPalette:v1",
     "beo:lastPalette",
     "beo_last_palette",
     "beorganich:lastPalette",
@@ -82,15 +83,13 @@ const inferredStyle =
   raw?.styleName ??
   (Array.isArray(palette) ? styleMap[(palette[0] as any)?.style ?? ""] : undefined);
       return {
-        styleName: inferredStyle ?? "SAGE STUDIO",
-        styleTag: raw?.styleTag ?? "stile dominante",
-        headline: raw?.headline ?? "Minimal moderno. Sempre coerente.",
-        subcopy:
-          raw?.subcopy ??
-          "Colori puliti, look ordinati: scegli in un attimo e compra senza ripensamenti.",
-        palette,
-        meta: raw?.meta ?? raw?.data?.meta ?? raw?.result?.meta,
-      };
+  styleName: raw?.styleName ?? raw?.meta?.styleName ?? "SAGE STUDIO",
+  styleTag: raw?.styleTag ?? "stile dominante",
+  headline: raw?.headline ?? "Minimal moderno. Sempre coerente.",
+  subcopy: raw?.subcopy ?? "Colori puliti, look ordinati...",
+  palette,
+  meta: raw?.meta,
+};
     }
   }
 
@@ -127,6 +126,13 @@ export default function ResultClient() {
 
   useEffect(() => {
     const fromStorage = readLastResultFromStorage();
+    const KEYS = [
+  "beorganich:lastPalette:v1",
+  "beorganich:savedPalette",
+  "beorganich:lastPalette",
+  "lastResult",
+  "lastPalette",
+];
 
     // fallback demo
     const fallback: ResultData = {
@@ -472,71 +478,79 @@ function roundRect(
 
       <main className="mx-auto max-w-3xl px-4 pb-28 pt-6">
         {/* HERO */}
-        <section className="rounded-3xl border border-white/10 bg-white/[0.03] p-5 sm:p-6">
-          {/* pills */}
-          <div className="flex flex-wrap gap-2">
-            <span className="select-none cursor-default rounded-full border border-white/10 bg-white/[0.03] px-3 py-2 text-[12px] text-white/75">
-              {data?.styleName ?? "SAGE STUDIO"}
-            </span>
-            <span className="select-none cursor-default rounded-full border border-white/10 bg-white/[0.03] px-3 py-2 text-[12px] text-white/60">
-              {data?.styleTag ?? "stile dominante"}
-            </span>
-          </div>
+        <section className="relative overflow-hidden rounded-3xl border border-white/10 bg-white/[0.03] p-6 sm:p-7">
+  {/* soft highlight */}
+  <div
+    aria-hidden
+    className="pointer-events-none absolute -top-24 left-1/2 h-64 w-64 -translate-x-1/2 rounded-full bg-white/[0.06] blur-3xl"
+  />
+  <div aria-hidden className="pointer-events-none absolute inset-0 bg-[radial-gradient(700px_220px_at_50%_-40px,rgba(255,255,255,0.10),transparent_60%)]" />
 
-          <h1 className="mt-4 text-balance text-4xl font-semibold tracking-tight leading-[1.05]">
-            {data?.headline ?? "Minimal moderno. Sempre coerente."}
-          </h1>
+  {/* pills */}
+  <div className="flex flex-wrap items-center gap-2">
+    <span className="select-none cursor-default rounded-full border border-white/12 bg-black/30 px-3 py-2 text-[12px] text-white/80 backdrop-blur">
+      {data?.styleName ?? "SAGE STUDIO"}
+    </span>
+    <span className="select-none cursor-default rounded-full border border-white/10 bg-white/[0.03] px-3 py-2 text-[12px] text-white/55">
+      {data?.styleTag ?? "stile dominante"}
+    </span>
 
-          <p className="mt-3 text-[15px] leading-7 text-white/70">
-            {data?.subcopy ??
-              "Colori puliti, look ordinati: scegli in un attimo e compra senza ripensamenti."}
-          </p>
-{/* ✅ Confidence score (premium) */}
-{data?.meta?.confidence != null && (
-  <div className="mt-4">
-    <ConfidencePill
-      value={data.meta.confidence}
-      label="Scan confidence"
-      hint={
-        data.meta.method
-          ? `Metodo: ${data.meta.method} · Qualità: ${data.meta.quality ?? "-"}% · Campioni: ${data.meta.sampleCount ?? "-"}`
-          : undefined
-      }
-    />
+    {/* confidence as badge (integrato) */}
+    {data?.meta?.confidence != null && (
+      <span className="ml-auto select-none cursor-default rounded-full border border-white/10 bg-white/[0.03] px-3 py-2 text-[12px] text-white/65">
+        Accuracy <span className="tabular-nums text-white/85">{data.meta.confidence}%</span>
+      </span>
+    )}
   </div>
-)}
-          <div className="mt-6 text-center text-[14px] leading-6 text-white/80">
-            <div className="font-medium">Questa palette è la tua firma.</div>
-            <div className="text-white/55">Usala come riferimento, sempre.</div>
-          </div>
 
-          {/* CTA -> palette */}
-          <button
-            type="button"
-            onClick={scrollToPalette}
-            className="group mt-5 flex w-full items-center justify-center gap-3 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-[13px] text-white/80 hover:bg-white/[0.06] transition active:scale-[0.99]"
-          >
-            <span className="text-white/70">Vuoi affinare la palette?</span>
-            <span className="font-semibold text-white/90">La tua firma è qui sotto</span>
+  <h1 className="mt-5 text-balance text-[38px] sm:text-[44px] font-semibold tracking-[-0.02em] leading-[1.04]">
+    {data?.headline ?? "Minimal moderno. Sempre coerente."}
+  </h1>
 
-            <span className="relative inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/12 bg-black/30">
-              <span className="absolute inset-0 rounded-full bg-white/5 blur-md opacity-0 group-hover:opacity-100 transition" />
-              <span className="text-[16px] leading-none">↓</span>
-            </span>
-          </button>
+  <p className="mt-3 max-w-[52ch] text-[15px] leading-7 text-white/70">
+    {data?.subcopy ??
+      "Colori puliti, look ordinati: scegli in un attimo e compra senza ripensamenti."}
+  </p>
 
-          <div className="mt-4 flex flex-wrap gap-2 text-[12px] text-white/55">
-            <span className="select-none cursor-default rounded-full border border-white/10 bg-white/[0.03] px-3 py-2">
-              Palette personale
-            </span>
-            <span className="select-none cursor-default rounded-full border border-white/10 bg-white/[0.03] px-3 py-2">
-              Match capi
-            </span>
-            <span className="select-none cursor-default rounded-full border border-white/10 bg-white/[0.03] px-3 py-2">
-              Nessuna foto salvata
-            </span>
-          </div>
-        </section>
+  {/* micro-value */}
+  <div className="mt-5 grid grid-cols-3 gap-2">
+    <div className="rounded-2xl border border-white/10 bg-white/[0.02] px-3 py-3">
+      <div className="text-[11px] tracking-[0.18em] text-white/45 uppercase">Palette</div>
+      <div className="mt-1 text-[12px] text-white/80">personale</div>
+    </div>
+    <div className="rounded-2xl border border-white/10 bg-white/[0.02] px-3 py-3">
+      <div className="text-[11px] tracking-[0.18em] text-white/45 uppercase">Match</div>
+      <div className="mt-1 text-[12px] text-white/80">capi</div>
+    </div>
+    <div className="rounded-2xl border border-white/10 bg-white/[0.02] px-3 py-3">
+      <div className="text-[11px] tracking-[0.18em] text-white/45 uppercase">Privacy</div>
+      <div className="mt-1 text-[12px] text-white/80">on-device</div>
+    </div>
+  </div>
+
+  {/* CTA row */}
+  <div className="mt-6 flex flex-col sm:flex-row gap-2">
+    <button
+      type="button"
+      onClick={scrollToPalette}
+      className="group flex-1 h-12 rounded-2xl bg-white text-black text-[14px] font-semibold transition active:scale-[0.99] hover:bg-white/90"
+    >
+      Vedi la palette
+      <span className="ml-2 inline-block transition group-hover:translate-x-0.5">→</span>
+    </button>
+
+    <Link
+      href="/scan"
+      className="flex-1 h-12 rounded-2xl border border-white/12 bg-white/[0.03] text-[14px] text-white/80 grid place-items-center transition hover:bg-white/[0.06] active:scale-[0.99]"
+    >
+      Rifai lo scan
+    </Link>
+  </div>
+
+  <div className="mt-4 text-center text-[12px] text-white/45">
+    Tip: salva la palette e usala come “uniform” quando compri.
+  </div>
+</section>
 
         {/* PALETTE */}
         <section
@@ -604,11 +618,12 @@ function roundRect(
                     type="button"
                     onClick={() => setPaletteOpen(true)}
                     className="
-                      snap-center shrink-0 w-[78%] sm:w-[420px]
-                      rounded-3xl border border-white/10 bg-white/[0.03]
-                      p-4 text-left transition active:scale-[0.99]
-                      hover:bg-white/[0.05]
-                    "
+  snap-center shrink-0 w-[78%] sm:w-[420px]
+  rounded-3xl border border-white/12 bg-white/[0.035]
+  p-4 text-left transition
+  hover:bg-white/[0.06] hover:border-white/20
+  active:scale-[0.985]
+"
                   >
                     <div className="flex items-center gap-4">
                       <div className="relative">
@@ -654,14 +669,28 @@ function roundRect(
 
           {/* vibe box */}
           <div className="mt-3 rounded-2xl border border-white/10 bg-white/[0.02] p-4">
-            <div className="text-[12px] text-white/70">
-              <span className="text-white/90 font-medium">Vibe pronta per TikTok:</span>
-            </div>
-            <div className="mt-2 whitespace-pre-line text-[12px] leading-6 text-white/55">{vibeText}</div>
-            <div className="mt-2 text-[12px] text-white/45">
-              Tip: screenshot palette → post → “che vibe ti dà?” → commenti = algoritmo 🔥
-            </div>
-          </div>
+  <div className="flex items-start justify-between gap-3">
+    <div>
+      <div className="text-[12px] tracking-[0.22em] text-white/45 uppercase">Share</div>
+      <div className="mt-1 text-[13px] text-white/80 font-medium">Caption pronta per TikTok</div>
+    </div>
+    <button
+      type="button"
+      onClick={onSharePalette}
+      className="rounded-full border border-white/12 bg-white/[0.03] px-3 py-2 text-[12px] text-white/75 hover:bg-white/[0.06] transition active:scale-[0.99]"
+    >
+      Copia
+    </button>
+  </div>
+
+  <div className="mt-3 whitespace-pre-line rounded-xl border border-white/10 bg-black/30 p-3 text-[12px] leading-6 text-white/55">
+    {vibeText}
+  </div>
+
+  <div className="mt-2 text-[12px] text-white/40">
+    Tip: screenshot palette → post → “che vibe ti dà?” → commenti = algoritmo.
+  </div>
+</div>
 
           <div className="mt-4 text-center">
             <Link
@@ -813,9 +842,9 @@ function roundRect(
                   <button
                     type="button"
                     onClick={onSavePalette}
-                    className="h-12 w-full rounded-2xl border border-white/15 bg-white/[0.03] text-[14px] text-white/90 hover:bg-white/[0.06] transition active:scale-[0.99]"
+                    className="relative z-10 inline-flex items-center justify-center gap-2 rounded-full border border-white/15 bg-black/30 px-4 py-2 text-[13px] text-white/90 backdrop-blur transition hover:bg-white/[0.08] hover:border-white/25 active:scale-[0.98]"
                   >
-                    Salva palette
+                    Salva <span className="text-white/60">↧</span>
                   </button>
                   <button
                     type="button"

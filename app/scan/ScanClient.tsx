@@ -5,6 +5,8 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { trackEvent } from "@/app/lib/telemetry";
 import { type PaletteItem, makePaletteFromSamples } from "@/app/lib/paletteLogic";
+import { getStyleInsight } from "@/app/lib/paletteLogic";
+import type { BrandStyle } from "@/app/lib/paletteLibrary";
 
 // ✅ MediaPipe on-device engine
 import {
@@ -65,15 +67,35 @@ const LAST_KEY = "beorganich:lastPalette:v1";
 let MEMORY_LAST: PaletteItem[] | null = null;
 
 /* ---------------- Persist ---------------- */
-function saveLastPalette(pal: PaletteItem[], meta: ScanMeta, stableHex?: string, samples?: string[]) {
+function saveLastPalette(
+  pal: PaletteItem[],
+  meta: ScanMeta,
+  stableHex?: string,
+  samples?: string[]
+) {
   MEMORY_LAST = pal;
+
+  // ✅ deduci stile e testi premium (per Result)
+  const bestStyle = deriveBestStyleFromPalette(pal);
+  const insight = getStyleInsight(bestStyle);
+
   try {
     localStorage.setItem(
       LAST_KEY,
       JSON.stringify({
         ts: Date.now(),
         palette: pal,
-        meta,
+        meta: {
+          ...meta,
+          style: bestStyle,           // ✅ utile anche per debug
+          styleName: insight.displayName, // ✅ quello che vuoi mostrare
+        },
+        // ✅ campi “Result-ready”
+        styleName: insight.displayName,
+        styleTag: "stile dominante",
+        headline: insight.title,
+        subcopy: insight.subtitle,
+
         stableHex: stableHex ?? null,
         samples: samples ?? null,
       })
@@ -82,7 +104,6 @@ function saveLastPalette(pal: PaletteItem[], meta: ScanMeta, stableHex?: string,
     // ignore
   }
 }
-
 /* ---------------- Utils ---------------- */
 function clamp(n: number, a: number, b: number) {
   return Math.max(a, Math.min(b, n));
@@ -142,6 +163,25 @@ function hexToLabLocal(hex: string) {
 }
 function deltaELocal(l1: { L: number; a: number; b: number }, l2: { L: number; a: number; b: number }) {
   return Math.hypot(l1.L - l2.L, l1.a - l2.a, l1.b - l2.b);
+}
+function deriveBestStyleFromPalette(pal: PaletteItem[]): BrandStyle {
+  const votes: Record<any, number> = {
+    "NOIR ICON": 0,
+    "SAND LUXE": 0,
+    "SAGE MODERN": 0,
+    "ICE ROYAL": 0,
+  };
+
+  for (const c of pal) {
+    if (c.style && votes[c.style] != null) votes[c.style] += 1;
+  }
+
+  let best: BrandStyle = "SAND LUXE";
+  (Object.keys(votes) as BrandStyle[]).forEach((s) => {
+    if (votes[s] > votes[best]) best = s;
+  });
+
+  return best;
 }
 
 /* ---------------- Signals + Confidence ---------------- */
