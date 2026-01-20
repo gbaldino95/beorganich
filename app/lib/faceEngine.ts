@@ -6,6 +6,29 @@ import {
   ImageSegmenter,
   type ImageSegmenterResult,
 } from "@mediapipe/tasks-vision";
+// --- DEV ONLY: suppress noisy TFLite "INFO" that Next overlay shows as error ---
+function suppressTfliteNoise() {
+  if (typeof window === "undefined") return;
+  if (process.env.NODE_ENV !== "development") return;
+
+  const key = "__tflite_noise_patched__";
+  if ((window as any)[key]) return;
+  (window as any)[key] = true;
+
+  const originalError = console.error.bind(console);
+  console.error = (...args: any[]) => {
+    const msg = String(args?.[0] ?? "");
+    if (
+      msg.includes("Created TensorFlow Lite XNNPACK delegate for CPU") ||
+      msg.startsWith("INFO: Created TensorFlow Lite")
+    ) {
+      return; // ignore
+    }
+    originalError(...args);
+  };
+}
+
+suppressTfliteNoise();
 
 export type Landmark = { x: number; y: number; z?: number }; // normalized 0..1
 export type FaceBox = { x: number; y: number; w: number; h: number };
@@ -203,27 +226,90 @@ export async function detectFaceOnImage(
 /** Detect face landmarks on VIDEO */
 
 export async function detectFaceOnVideo(video: HTMLVideoElement, timestampMs: number) {
+  const lm = await getFaceLandmarker("VIDEO");
+
+  // ✅ Guard: video deve essere pronto davvero
+  const vw = video.videoWidth;
+  const vh = video.videoHeight;
+
+  if (!vw || !vh) return null;
+  if (video.readyState < 2) return null; // HAVE_CURRENT_DATA
+
+  // ✅ Timestamp safe (Safari/WebKit rompe se non è monotono)
+  // Nota: MediaPipe vuole "timestamp in ms" crescente.
+  // Se il chiamante passa performance.now() va bene, ma ci mettiamo una safety.
+  const safeT = getMonotonicTimestamp(timestampMs);
+
+  // ---- Try 1: detectForVideo (fast path) ----
   try {
-    const lm = await getFaceLandmarker("VIDEO");
-
-    // ✅ guard: video pronto
-    if (!video.videoWidth || !video.videoHeight) return null;
-    if (video.readyState < 2) return null; // HAVE_CURRENT_DATA
-
-    // ✅ timestamp SEMPRE monotono (MediaPipe VIDEO lo pretende)
-    const raw = Number.isFinite(timestampMs) ? timestampMs : performance.now();
-    const t = Math.max(raw, _lastVideoTs + 1);
-    _lastVideoTs = t;
-
-    const res = lm.detectForVideo(video, t) as FaceLandmarkerResult;
-    const face = res.faceLandmarks?.[0];
-    if (!face?.length) return null;
-
-    return face as Landmark[];
+    const res = lm.detectForVideo(video, safeT) as FaceLandmarkerResult | undefined;
+    const face = res?.faceLandmarks?.[0];
+    if (face?.length) return face as Landmark[];
   } catch (e) {
-    // ✅ evita overlay error in dev
+    // NON throw: fallback sotto
+    // console.debug("detectForVideo failed", e);
+  }
+
+  // ---- Try 2: detect(video) (alcuni build supportano detect anche su video) ----
+  try {
+    const res = (lm as any).detect?.(video) as FaceLandmarkerResult | undefined;
+    const face = res?.faceLandmarks?.[0];
+    if (face?.length) return face as Landmark[];
+  } catch (e) {
+    // console.debug("detect(video) failed", e);
+  }
+
+  // ---- Try 3: fallback UNIVERSALE: frame -> canvas -> ImageData ----
+  try {
+    const imgData = frameToImageData(video);
+    if (!imgData) return null;
+
+    const res = lm.detect(imgData as any) as FaceLandmarkerResult | undefined;
+    const face = res?.faceLandmarks?.[0];
+    if (face?.length) return face as Landmark[];
+  } catch (e) {
+    // console.debug("detect(ImageData) failed", e);
     return null;
   }
+
+  return null;
+}
+
+/* -------------------- Helpers (incolla sotto nello stesso file) -------------------- */
+
+let _lastTs = 0;
+function getMonotonicTimestamp(t: number) {
+  const now = Number.isFinite(t) ? t : performance.now();
+  // forza monotonia
+  if (now <= _lastTs) _lastTs = _lastTs + 1;
+  else _lastTs = now;
+  return _lastTs;
+}
+
+let _tmpCanvas: HTMLCanvasElement | null = null;
+let _tmpCtx: CanvasRenderingContext2D | null = null;
+
+function frameToImageData(video: HTMLVideoElement): ImageData | null {
+  const vw = video.videoWidth;
+  const vh = video.videoHeight;
+  if (!vw || !vh) return null;
+
+  if (!_tmpCanvas) _tmpCanvas = document.createElement("canvas");
+  _tmpCanvas.width = vw;
+  _tmpCanvas.height = vh;
+
+  if (!_tmpCtx) _tmpCtx = _tmpCanvas.getContext("2d", { willReadFrequently: true });
+  const ctx = _tmpCtx;
+  if (!ctx) return null;
+
+  // reset transform safety
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.clearRect(0, 0, vw, vh);
+
+  // ⚠️ non mirroriamo qui: i landmarks vanno in coordinate video raw.
+  ctx.drawImage(video, 0, 0, vw, vh);
+
+  return ctx.getImageData(0, 0, vw, vh);
 }
 
 type Mask = { w: number; h: number; data: Float32Array | Uint8Array };

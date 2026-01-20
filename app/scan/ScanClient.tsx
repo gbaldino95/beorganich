@@ -811,7 +811,11 @@ export default function ScanPage() {
         rafRef.current = requestAnimationFrame(runTick);
         return;
       }
-
+console.log("🎨 stableHex FINAL", stableHex, {
+  samples: stableHexesRef.current.length,
+  first: stableHexesRef.current[0],
+  last: stableHexesRef.current[stableHexesRef.current.length - 1],
+});
       const pal = makePaletteFromSamples(stableHex);
 
       const signals = getSkinSignalsFromHex(stableHex);

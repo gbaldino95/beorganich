@@ -214,6 +214,7 @@ type Scored = (typeof BRAND_COLORS)[number] & {
  * - stile dedotto con voto pesato dai punteggi (non solo count)
  */
 export function makePaletteFromSamples(baseHex: string): PaletteItem[] {
+  console.log("🎨 makePaletteFromSamples INPUT:", baseHex);
   const skinHex = normalizeHex(baseHex);
   const skinLab = hexToLab(skinHex);
   const sig = skinSignalsFromLab(skinLab);
