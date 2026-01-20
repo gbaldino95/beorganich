@@ -811,11 +811,8 @@ export default function ScanPage() {
         rafRef.current = requestAnimationFrame(runTick);
         return;
       }
-console.log("🎨 stableHex FINAL", stableHex, {
-  samples: stableHexesRef.current.length,
-  first: stableHexesRef.current[0],
-  last: stableHexesRef.current[stableHexesRef.current.length - 1],
-});
+console.log("🟢 STABLE HEX:", stableHex);
+console.log("🟡 ALL HEXES:", [...stableHexesRef.current]);
       const pal = makePaletteFromSamples(stableHex);
 
       const signals = getSkinSignalsFromHex(stableHex);
@@ -1332,8 +1329,8 @@ console.log("🎨 stableHex FINAL", stableHex, {
       </main>
 
       {/* Sticky bottom */}
-      <div className="fixed bottom-0 left-0 right-0 px-5 pb-[calc(env(safe-area-inset-bottom)+16px)] pt-4 bg-gradient-to-t from-black/90 to-transparent">
-        <div className="mx-auto flex max-w-md flex-col gap-3">
+<div className="fixed bottom-0 left-0 right-0 z-[90] px-5 pb-[calc(env(safe-area-inset-bottom)+16px)] pt-4 bg-gradient-to-t from-black/90 to-transparent">
+  <div className="mx-auto flex max-w-md flex-col gap-3">
           <button
             onClick={startRitual}
             className="h-14 w-full rounded-2xl bg-white text-black text-[15px] font-medium tracking-wide hover:bg-white/90 transition active:scale-[0.99]"
