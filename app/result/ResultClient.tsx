@@ -9,7 +9,7 @@ import ConfidencePill from "@/app/components/ConfidencePill";
 import ProductsCarousel from "@/app/components/ProductsCarousel";
 import type { PaletteItem } from "@/app/lib/paletteLogic";
 
-type PaletteColor = { name: string; hex: string };
+type PaletteColor = { name: string; hex: string; style?: string };
 
 type ResultData = {
   styleName?: string;
@@ -70,8 +70,19 @@ function readLastResultFromStorage(): ResultData | null {
       raw?.result?.palette;
 
     if (Array.isArray(palette) && palette.length) {
+      const styleMap: Record<string, string> = {
+  "NOIR ICON": "ICON NOIR",
+  "SAND LUXE": "SAND LUXE",
+  "SAGE MODERN": "SAGE STUDIO",
+  "ICE ROYAL": "ICE ROYAL",
+};
+
+const inferredStyle =
+  raw?.meta?.styleName ??
+  raw?.styleName ??
+  (Array.isArray(palette) ? styleMap[(palette[0] as any)?.style ?? ""] : undefined);
       return {
-        styleName: raw?.meta?.styleName ?? raw?.styleName ?? "SAGE STUDIO",
+        styleName: inferredStyle ?? "SAGE STUDIO",
         styleTag: raw?.styleTag ?? "stile dominante",
         headline: raw?.headline ?? "Minimal moderno. Sempre coerente.",
         subcopy:
