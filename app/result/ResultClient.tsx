@@ -556,118 +556,7 @@ function roundRect(
                 Se sei indeciso: scegli un colore qui dentro e vai sul sicuro.
               </p>
             </div>
-{/* ULTRA LUXURY PALETTE GRID */}
-<div className="mt-5 rounded-3xl border border-white/10 bg-black/30 p-4 sm:p-5 overflow-hidden">
-  {/* top micro-header */}
-  <div className="flex items-center justify-between">
-    <div className="text-[12px] uppercase tracking-[0.22em] text-white/45">
-      Palette personale
-    </div>
 
-    <button
-      type="button"
-      onClick={() => {
-        try {
-          const text = palette.map((c) => `${c.name} ${c.hex.toUpperCase()}`).join(" • ");
-          navigator.clipboard?.writeText(text);
-          setToast("Palette copiata ✅");
-        } catch {
-          setToast("Impossibile copiare 😕");
-        }
-      }}
-      className="rounded-full border border-white/12 bg-white/[0.03] px-3 py-2 text-[12px] text-white/70 hover:bg-white/[0.06] transition active:scale-[0.99]"
-    >
-      Copia palette
-    </button>
-  </div>
-
-  <div className="mt-2 text-[12px] text-white/45">
-    Tocca un colore per copiare l’HEX.
-  </div>
-
-  {/* grid */}
-  <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
-    {palette.map((c, i) => (
-      <button
-        key={`${c.name}-${c.hex}-${i}`}
-        type="button"
-        onClick={async () => {
-          try {
-            await navigator.clipboard.writeText(c.hex.toUpperCase());
-            setToast(`${c.hex.toUpperCase()} copiato ✅`);
-          } catch {
-            setToast("Copia non supportata 😕");
-          }
-        }}
-        className="
-          group relative overflow-hidden rounded-3xl
-          border border-white/10 bg-white/[0.03]
-          text-left transition
-          hover:bg-white/[0.06] hover:border-white/20
-          active:scale-[0.99]
-        "
-      >
-        {/* soft glow */}
-        <div
-          className="pointer-events-none absolute -inset-10 opacity-20 blur-2xl"
-          style={{ background: c.hex }}
-          aria-hidden
-        />
-
-        <div className="relative p-3">
-          {/* swatch */}
-          <div className="relative">
-            <div
-              className="h-[92px] w-full rounded-2xl border border-white/10"
-              style={{ background: c.hex }}
-            />
-            <div className="pointer-events-none absolute inset-0 rounded-2xl shadow-[inset_0_0_0_1px_rgba(255,255,255,0.06)]" />
-
-            {/* micro-chip */}
-            <div className="absolute left-2 top-2 inline-flex items-center gap-2 rounded-full border border-white/12 bg-black/45 px-2 py-1 backdrop-blur">
-              <span className="h-2 w-2 rounded-full bg-white/70" />
-              <span className="text-[11px] text-white/80">
-                {i === 0 ? "Anchor" : i === 1 ? "Core" : i === 2 ? "Lift" : "Accent"}
-              </span>
-            </div>
-          </div>
-
-          {/* text */}
-          <div className="mt-3">
-            <div className="text-[15px] font-semibold text-white/90 truncate">
-              {c.name}
-            </div>
-
-            <div className="mt-1 flex items-center justify-between">
-              <div className="text-[12px] font-mono text-white/55">
-                {c.hex.toUpperCase()}
-              </div>
-
-              <div className="text-[12px] text-white/45 opacity-0 translate-y-[2px] group-hover:opacity-100 group-hover:translate-y-0 transition">
-                Copia →
-              </div>
-            </div>
-
-            <div className="mt-2 text-[12px] leading-5 text-white/55">
-              {i === 0
-                ? "Base forte: capi principali."
-                : i === 1
-                ? "Routine: facile da abbinare."
-                : i === 2
-                ? "Illumina: perfetto per top."
-                : "Dettaglio: alza il livello."}
-            </div>
-          </div>
-        </div>
-      </button>
-    ))}
-  </div>
-
-  {/* premium footnote */}
-  <div className="mt-4 rounded-2xl border border-white/10 bg-white/[0.02] p-3 text-[12px] text-white/55">
-    Regola luxury: scegli <span className="text-white/80 font-medium">1 colore</span> e costruisci l’outfit attorno. Zero caos.
-  </div>
-</div>
             <div className="flex items-center gap-2">
               <button
                 onClick={onSavePaletteToGallery}
@@ -685,6 +574,91 @@ function roundRect(
               </button>
             </div>
           </div>
+
+          {/* PALETTE SPOTLIGHT */}
+          <div className="mt-5 rounded-3xl border border-white/10 bg-black/20 overflow-hidden">
+            <div className="flex items-center justify-between px-4 pt-4">
+              <div className="text-[12px] tracking-[0.22em] text-white/55 uppercase">
+                Palette spotlight
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setPaletteOpen(true)}
+                className="rounded-full border border-white/15 bg-white/[0.03] px-3 py-2 text-[12px] text-white/75 hover:bg-white/[0.06] transition active:scale-[0.99]"
+              >
+                Espandi
+              </button>
+            </div>
+
+            <div className="px-4 -mt-1 pb-2 text-[12px] text-white/45">
+              Scorri → per vedere tutta la palette
+            </div>
+
+            <div className="relative">
+              <div className="pointer-events-none absolute inset-y-0 left-0 w-10 bg-gradient-to-r from-black/60 to-transparent z-10" />
+              <div className="pointer-events-none absolute inset-y-0 right-0 w-10 bg-gradient-to-l from-black/60 to-transparent z-10" />
+
+              <div
+                ref={paletteScrollRef}
+                className="mt-1 flex gap-4 overflow-x-auto px-4 pb-4 no-scrollbar snap-x snap-mandatory"
+              >
+                {palette.map((c, i) => (
+                  <button
+                    key={`${c.name}-${c.hex}`}
+                    data-swatch-card
+                    type="button"
+                    onClick={() => setPaletteOpen(true)}
+                    className="
+  snap-center shrink-0 w-[78%] sm:w-[420px]
+  rounded-3xl border border-white/12 bg-white/[0.035]
+  p-4 text-left transition
+  hover:bg-white/[0.06] hover:border-white/20
+  active:scale-[0.985]
+"
+                  >
+                    <div className="flex items-center gap-4">
+                      <div className="relative">
+                        <div
+                          className="h-16 w-16 rounded-3xl border border-white/10"
+                          style={{ background: c.hex }}
+                        />
+                        <div
+                          className="absolute -inset-4 rounded-[28px] opacity-30 blur-2xl"
+                          style={{ background: c.hex }}
+                          aria-hidden
+                        />
+                      </div>
+
+                      <div className="min-w-0">
+                        <div className="text-[16px] font-semibold text-white/90 truncate">{c.name}</div>
+                        <div className="mt-1 text-[12px] text-white/55 font-mono">{c.hex}</div>
+                        <div className="mt-2 text-[12px] leading-5 text-white/60">
+                          {i === 0
+                            ? "Base forte: ti fa sembrare subito più ordinato."
+                            : "Usalo nei capi principali per un look coerente."}
+                        </div>
+                      </div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex items-center justify-center gap-2 pb-4">
+              {palette.map((_, i) => (
+                <div
+                  key={i}
+                  className={
+                    i === activeIdx
+                      ? "h-[7px] w-[7px] rounded-full bg-white/70 border border-white/20"
+                      : "h-[7px] w-[7px] rounded-full bg-white/10 border border-white/15"
+                  }
+                />
+              ))}
+            </div>
+          </div>
+
           {/* vibe box */}
           <div className="mt-3 rounded-2xl border border-white/10 bg-white/[0.02] p-4">
   <div className="flex items-start justify-between gap-3">
