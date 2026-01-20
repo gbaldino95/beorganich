@@ -704,22 +704,7 @@ function roundRect(
 
         {/* PRODUCTS */}
         <section className="mt-5">
-          <div className="flex items-end justify-between gap-3 px-1">
-            <div>
-              <div className="text-[16px] font-semibold text-white/90">Capi consigliati</div>
-              <div className="mt-1 text-[12px] text-white/55">
-                Selezionati per la tua palette. Clicca un capo per aprirlo.
-              </div>
-            </div>
-
-            <Link
-              href="/shop"
-              className="text-[12px] text-white/70 underline underline-offset-4 hover:text-white/90 transition"
-            >
-              Vai allo shop →
-            </Link>
-          </div>
-
+          
           <div className="mt-3">
             <ProductsCarousel palette={paletteForCarousel} shopUrl={SHOP_URL} />
           </div>
