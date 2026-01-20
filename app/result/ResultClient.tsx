@@ -3,6 +3,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import html2canvas from "html2canvas";
 import Link from "next/link";
+import ConfidencePill from "@/app/components/ConfidencePill";
 
 // ✅ usa il tuo componente
 import ProductsCarousel from "@/app/components/ProductsCarousel";
@@ -16,51 +17,12 @@ type ResultData = {
   headline?: string;
   subcopy?: string;
   palette?: PaletteColor[];
-};
-const onSavePaletteToGallery = async () => {
-  const el = document.getElementById("palette-export");
-  if (!el) {
-    alert("Palette non trovata");
-    return;
-  }
-
-  try {
-    const html2canvas = (await import("html2canvas")).default;
-
-    const canvas = await html2canvas(el, {
-      backgroundColor: "#0b0b0b",
-      scale: 2,
-    });
-
-    const blob = await new Promise<Blob | null>((resolve) =>
-      canvas.toBlob(resolve, "image/png")
-    );
-
-    if (!blob) return;
-
-    const file = new File([blob], "UNYFORM_palette.png", {
-      type: "image/png",
-    });
-
-    // 👉 Mobile: salva in galleria tramite share sheet
-    if (navigator.canShare && navigator.canShare({ files: [file] })) {
-      await navigator.share({
-        files: [file],
-        title: "La mia palette UNYFORM",
-      });
-    } else {
-      // 👉 Desktop fallback: download
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "UNYFORM_palette.png";
-      a.click();
-      URL.revokeObjectURL(url);
-    }
-  } catch (e) {
-    console.error(e);
-    alert("Errore nel salvataggio");
-  }
+  meta?: {
+    confidence?: number;
+    quality?: number;
+    method?: "camera" | "upload";
+    sampleCount?: number;
+  };
 };
 function cx(...parts: Array<string | false | undefined | null>) {
   return parts.filter(Boolean).join(" ");
@@ -116,6 +78,7 @@ function readLastResultFromStorage(): ResultData | null {
           raw?.subcopy ??
           "Colori puliti, look ordinati: scegli in un attimo e compra senza ripensamenti.",
         palette,
+        meta: raw?.meta ?? raw?.data?.meta ?? raw?.result?.meta,
       };
     }
   }
@@ -173,6 +136,15 @@ export default function ResultClient() {
 
     setData(fromStorage ?? fallback);
   }, []);
+
+  // auto-hide toast
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(null), 2200);
+    return () => clearTimeout(t);
+  }, [toast]);
+
+  const palette = data?.palette ?? [];
 const onSavePaletteToGallery = async () => {
   try {
     if (!palette?.length) {
@@ -290,15 +262,6 @@ function roundRect(
   ctx.arcTo(x, y, x + w, y, radius);
   ctx.closePath();
 }
-  // auto-hide toast
-  useEffect(() => {
-    if (!toast) return;
-    const t = setTimeout(() => setToast(null), 2200);
-    return () => clearTimeout(t);
-  }, [toast]);
-
-  const palette = data?.palette ?? [];
-
   // active dot logic
   useEffect(() => {
     const el = paletteScrollRef.current;
@@ -517,7 +480,20 @@ function roundRect(
             {data?.subcopy ??
               "Colori puliti, look ordinati: scegli in un attimo e compra senza ripensamenti."}
           </p>
-
+{/* ✅ Confidence score (premium) */}
+{data?.meta?.confidence != null && (
+  <div className="mt-4">
+    <ConfidencePill
+      value={data.meta.confidence}
+      label="Scan confidence"
+      hint={
+        data.meta.method
+          ? `Metodo: ${data.meta.method} · Qualità: ${data.meta.quality ?? "-"}% · Campioni: ${data.meta.sampleCount ?? "-"}`
+          : undefined
+      }
+    />
+  </div>
+)}
           <div className="mt-6 text-center text-[14px] leading-6 text-white/80">
             <div className="font-medium">Questa palette è la tua firma.</div>
             <div className="text-white/55">Usala come riferimento, sempre.</div>
