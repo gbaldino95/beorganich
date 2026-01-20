@@ -2,7 +2,6 @@
 "use client";
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { trackEvent } from "@/app/lib/telemetry";
 import { type PaletteItem, makePaletteFromSamples } from "@/app/lib/paletteLogic";
@@ -23,35 +22,32 @@ declare global {
     ttq?: any;
   }
 }
+
+/* ---------------- TikTok Pixel helper ---------------- */
+function trackTT(event: string, data: Record<string, any> = {}) {
+  try {
+    if (typeof window !== "undefined" && window.ttq) window.ttq.track(event, data);
+  } catch {
+    // ignore
+  }
+}
+
+/* ---------------- Camera error explain ---------------- */
 function explainCamError(err: any) {
   const name = String(err?.name || "");
   const msg = String(err?.message || "");
-
   console.error("getUserMedia ERROR:", { name, msg, err });
 
   if (name === "NotAllowedError" || name === "SecurityError") return "NOT_ALLOWED";
   if (name === "NotFoundError") return "NO_CAMERA";
   if (name === "NotReadableError") return "BUSY";
   if (name === "OverconstrainedError") return "CONSTRAINTS";
-
   return `RAW:${name}:${msg}`;
 }
-function track(event: string, data: Record<string, any> = {}) {
-  if (typeof window !== "undefined" && window.ttq) {
-    window.ttq.track(event, data);
-  }
-}
 
+/* ---------------- Types ---------------- */
 type RitualState = "idle" | "calibrating" | "error" | "loading";
 
-const BRAND = "BEORGANICH";
-const SHOP_URL = "https://shop.beorganich-example.com"; // placeholder
-const LAST_KEY = "beorganich:lastPalette:v1";
-
-// fallback RAM
-let MEMORY_LAST: PaletteItem[] | null = null;
-
-/* ---------------- Persist ---------------- */
 type ScanMeta = {
   method: "camera" | "upload";
   confidence: number; // 0..100
@@ -62,7 +58,14 @@ type ScanMeta = {
   quality: number; // 0..100
 };
 
-function saveLastPalette(pal: PaletteItem[], meta: ScanMeta) {
+const BRAND = "UNYFORM"; // (se vuoi, cambia qui il brand visible)
+const LAST_KEY = "beorganich:lastPalette:v1";
+
+/* ---------------- Fallback RAM ---------------- */
+let MEMORY_LAST: PaletteItem[] | null = null;
+
+/* ---------------- Persist ---------------- */
+function saveLastPalette(pal: PaletteItem[], meta: ScanMeta, stableHex?: string, samples?: string[]) {
   MEMORY_LAST = pal;
   try {
     localStorage.setItem(
@@ -71,9 +74,13 @@ function saveLastPalette(pal: PaletteItem[], meta: ScanMeta) {
         ts: Date.now(),
         palette: pal,
         meta,
+        stableHex: stableHex ?? null,
+        samples: samples ?? null,
       })
     );
-  } catch {}
+  } catch {
+    // ignore
+  }
 }
 
 /* ---------------- Utils ---------------- */
@@ -87,7 +94,7 @@ function lerp(a: number, b: number, t: number) {
   return a + (b - a) * t;
 }
 
-/* ---------------- Robust local color math (NO imports) ---------------- */
+/* ---------------- Local color math (robust + fast, no imports) ---------------- */
 function normalizeHexLocal(hex: string) {
   const h = (hex || "").trim();
   if (!h) return "#777777";
@@ -133,14 +140,11 @@ function hexToLabLocal(hex: string) {
   const { X, Y, Z } = rgbToXyz(r, g, b);
   return xyzToLab(X, Y, Z);
 }
-function deltaELocal(
-  l1: { L: number; a: number; b: number },
-  l2: { L: number; a: number; b: number }
-) {
+function deltaELocal(l1: { L: number; a: number; b: number }, l2: { L: number; a: number; b: number }) {
   return Math.hypot(l1.L - l2.L, l1.a - l2.a, l1.b - l2.b);
 }
 
-/* ---------------- Confidence helpers ---------------- */
+/* ---------------- Signals + Confidence ---------------- */
 function getSkinSignalsFromHex(hex: string) {
   const lab = hexToLabLocal(hex);
   const L = lab.L;
@@ -172,17 +176,52 @@ function computeConfidenceFromHexes(params: { stableHex: string; hexes: string[]
     .filter((d) => Number.isFinite(d) && d < 999);
 
   const avgDE = ds.length ? ds.reduce((x, y) => x + y, 0) / ds.length : 99;
-  const stability01 = clamp01(1 - avgDE / 18);
-  const count01 = clamp01(hexes.length / 24);
+  const stability01 = clamp01(1 - avgDE / 16); // più severo = più qualità
+  const count01 = clamp01(hexes.length / 30);
 
-  const conf01 = clamp01(0.45 * quality01 + 0.35 * stability01 + 0.2 * count01);
+  const conf01 = clamp01(0.46 * quality01 + 0.36 * stability01 + 0.18 * count01);
   return { confidence: Math.round(conf01 * 100), avgDE: Math.round(avgDE * 10) / 10 };
 }
 
+/* ---------------- Stable hex (median in Lab) ---------------- */
+function medianNum(arr: number[]) {
+  if (!arr.length) return 0;
+  const a = [...arr].sort((x, y) => x - y);
+  const mid = Math.floor(a.length / 2);
+  return a.length % 2 ? a[mid] : (a[mid - 1] + a[mid]) / 2;
+}
+
+function pickStableHex(hexes: string[]) {
+  if (!hexes.length) return "#777777";
+
+  // 1) normalize
+  const norm = hexes.map((h) => normalizeHexLocal(h)).filter((h) => h !== "#777777");
+
+  if (!norm.length) return "#777777";
+
+  // 2) robust median in Lab
+  const labs = norm.map((h) => ({ h, lab: hexToLabLocal(h) }));
+  const Lm = medianNum(labs.map((x) => x.lab.L));
+  const am = medianNum(labs.map((x) => x.lab.a));
+  const bm = medianNum(labs.map((x) => x.lab.b));
+
+  let best = labs[0].h;
+  let bestD = Infinity;
+
+  for (const x of labs) {
+    const d = Math.hypot(x.lab.L - Lm, x.lab.a - am, x.lab.b - bm);
+    if (d < bestD) {
+      bestD = d;
+      best = x.h;
+    }
+  }
+  return best;
+}
+
 /* ---------------- Image compress (upload stability) ---------------- */
-async function compressImageToWebP(file: File, opts: { maxSide?: number; quality?: number } = {}): Promise<Blob> {
+async function compressImageToWebP(file: File, opts: { maxSide?: number; quality?: number } = {}) {
   const maxSide = opts.maxSide ?? 1600;
-  const quality = opts.quality ?? 0.82;
+  const quality = opts.quality ?? 0.84;
 
   let bmp: ImageBitmap | null = null;
   try {
@@ -204,8 +243,7 @@ async function compressImageToWebP(file: File, opts: { maxSide?: number; quality
     try {
       const img = new Image();
       img.src = url;
-      // ✅ IMPORTANT: aspetta che l’immagine sia davvero decodificata (Safari/iOS)
-await img.decode().catch(() => {});
+      await img.decode().catch(() => {});
       w = img.naturalWidth;
       h = img.naturalHeight;
       drawSource = img;
@@ -236,6 +274,7 @@ await img.decode().catch(() => {});
   return blob;
 }
 
+/* ---------------- Canvas draw (camera mirror) ---------------- */
 function drawMirrorToCanvas(video: HTMLVideoElement, canvas: HTMLCanvasElement) {
   const vw = video.videoWidth;
   const vh = video.videoHeight;
@@ -256,6 +295,7 @@ function drawMirrorToCanvas(video: HTMLVideoElement, canvas: HTMLCanvasElement) 
   return true;
 }
 
+/* ---------------- Quality metrics ---------------- */
 function sampleRGB(ctx: CanvasRenderingContext2D, x: number, y: number, box: number) {
   const xx = Math.floor(x - box / 2);
   const yy = Math.floor(y - box / 2);
@@ -349,7 +389,6 @@ function computeFaceBoxFromLandmarks(landmarks: Landmark[], canvasW: number, can
   for (const lm of landmarks) {
     const x = mirrorX ? 1 - lm.x : lm.x;
     const y = lm.y;
-
     if (x < minX) minX = x;
     if (y < minY) minY = y;
     if (x > maxX) maxX = x;
@@ -390,7 +429,7 @@ function isFacePlausible(face: MPFaceBox, canvasW: number, canvasH: number) {
   return { ok: okArea && okCenter && okAspect && okPx };
 }
 
-/* ---------------- landmark plausibility ---------------- */
+/* ---------------- Landmark plausibility (fast) ---------------- */
 const IDX = {
   leftEyeOuter: 33,
   leftEyeInner: 133,
@@ -404,12 +443,10 @@ const IDX = {
 function dist(a: { x: number; y: number }, b: { x: number; y: number }) {
   return Math.hypot(a.x - b.x, a.y - b.y);
 }
-
 function lmPx(lm: Landmark, W: number, H: number, mirrorX?: boolean) {
   const nx = mirrorX ? 1 - lm.x : lm.x;
   return { x: nx * W, y: lm.y * H };
 }
-
 function isLandmarksPlausible(landmarks: Landmark[], W: number, H: number, mirrorX?: boolean) {
   const leO = landmarks[IDX.leftEyeOuter];
   const leI = landmarks[IDX.leftEyeInner];
@@ -453,37 +490,7 @@ function isLandmarksPlausible(landmarks: Landmark[], W: number, H: number, mirro
   return { ok: true as const };
 }
 
-function scoreLandmarksPlausibility(landmarks: Landmark[], W: number, H: number, mirrorX?: boolean) {
-  const r = isLandmarksPlausible(landmarks, W, H, mirrorX);
-  if (!r.ok) return 0;
-
-  const leO = landmarks[IDX.leftEyeOuter];
-  const reO = landmarks[IDX.rightEyeOuter];
-  if (!leO || !reO) return 0;
-
-  const p1 = lmPx(leO, W, H, mirrorX);
-  const p2 = lmPx(reO, W, H, mirrorX);
-  const eyeSpan = dist(p1, p2);
-
-  return clamp(eyeSpan / 220, 0, 1);
-}
-
-function pickBestMirrorForImage(landmarks: Landmark[], W: number, H: number) {
-  const s0 = scoreLandmarksPlausibility(landmarks, W, H, false);
-  const s1 = scoreLandmarksPlausibility(landmarks, W, H, true);
-  return s1 > s0;
-}
-
-/* ---------------- WebGPU availability ---------------- */
-async function hasWebGPU() {
-  try {
-    return typeof navigator !== "undefined" && !!(navigator as any).gpu;
-  } catch {
-    return false;
-  }
-}
-
-/* ---------------- Sharpness + Motion ---------------- */
+/* ---------------- Sharpness + Motion (premium) ---------------- */
 function computeSharpness(ctx: CanvasRenderingContext2D, face: MPFaceBox) {
   const pad = 0.18;
   const x0 = clamp(Math.floor(face.x + face.w * pad), 0, ctx.canvas.width - 1);
@@ -533,7 +540,11 @@ function computeSharpness(ctx: CanvasRenderingContext2D, face: MPFaceBox) {
   return Math.max(0, varr);
 }
 
-function computeMotionScore(ctx: CanvasRenderingContext2D, face: MPFaceBox, prevRef: React.MutableRefObject<Float32Array | null>) {
+function computeMotionScore(
+  ctx: CanvasRenderingContext2D,
+  face: MPFaceBox,
+  prevRef: React.MutableRefObject<Float32Array | null>
+) {
   const pad = 0.26;
   const x0 = clamp(Math.floor(face.x + face.w * pad), 0, ctx.canvas.width - 1);
   const y0 = clamp(Math.floor(face.y + face.h * pad), 0, ctx.canvas.height - 1);
@@ -574,38 +585,11 @@ function computeMotionScore(ctx: CanvasRenderingContext2D, face: MPFaceBox, prev
   return clamp(1 - diff / 10, 0, 1);
 }
 
-/* ---------------- Stable hex (median in Lab) ---------------- */
-function medianNum(arr: number[]) {
-  if (!arr.length) return 0;
-  const a = [...arr].sort((x, y) => x - y);
-  const mid = Math.floor(a.length / 2);
-  return a.length % 2 ? a[mid] : (a[mid - 1] + a[mid]) / 2;
-}
-
-function pickStableHex(hexes: string[]) {
-  if (!hexes.length) return "#777777";
-  const labs = hexes.map((h) => ({ h: normalizeHexLocal(h), lab: hexToLabLocal(h) }));
-  const Lm = medianNum(labs.map((x) => x.lab.L));
-  const am = medianNum(labs.map((x) => x.lab.a));
-  const bm = medianNum(labs.map((x) => x.lab.b));
-
-  let best = labs[0].h;
-  let bestD = Infinity;
-
-  for (const x of labs) {
-    const d = Math.hypot(x.lab.L - Lm, x.lab.a - am, x.lab.b - bm);
-    if (d < bestD) {
-      bestD = d;
-      best = x.h;
-    }
-  }
-  return best;
-}
-
 /* ---------------- Component ---------------- */
 export default function ScanPage() {
   const router = useRouter();
   const params = useSearchParams();
+  const debug = params.get("debug") === "1";
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -620,86 +604,77 @@ export default function ScanPage() {
   const [lastFailReason, setLastFailReason] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [scanFull, setScanFull] = useState(false);
+
   const goodFramesRef = useRef(0);
   const smoothedQualityRef = useRef(0);
   const stableHexesRef = useRef<string[]>([]);
   const lastStableSampleAtRef = useRef(0);
   const prevMotionRef = useRef<Float32Array | null>(null);
-  const webgpuRef = useRef<boolean>(false);
 
-  // ✅ soglia 65%
-  const THRESHOLD = 0.65;
-  function explainCamError(err: any) {
-  const name = String(err?.name || "");
-  const msg = String(err?.message || "");
-
-  // log completo
-  console.error("getUserMedia ERROR:", { name, msg, err });
-
-  if (name === "NotAllowedError" || name === "SecurityError") return "NOT_ALLOWED";
-  if (name === "NotFoundError") return "NO_CAMERA";
-  if (name === "NotReadableError") return "BUSY";
-  if (name === "OverconstrainedError") return "CONSTRAINTS";
-
-  // fallback: mostra il raw
-  return `RAW:${name}:${msg}`;
-}
-
-  useEffect(() => {
-    (async () => {
-      webgpuRef.current = await hasWebGPU();
-    })();
-  }, []);
+  // ✅ soglia quality
+  const THRESHOLD = 0.66;
 
   const stopCamera = useCallback(() => {
     if (rafRef.current) cancelAnimationFrame(rafRef.current);
     rafRef.current = null;
 
     if (videoRef.current) {
-      videoRef.current.pause();
+      try {
+        videoRef.current.pause();
+      } catch {}
       videoRef.current.srcObject = null;
     }
 
     if (streamRef.current) {
-      for (const t of streamRef.current.getTracks()) t.stop();
+      for (const t of streamRef.current.getTracks()) {
+        try {
+          t.stop();
+        } catch {}
+      }
       streamRef.current = null;
     }
   }, []);
 
   useEffect(() => () => stopCamera(), [stopCamera]);
-  const scrollToScan = useCallback(() => {
-  const el = scanAnchorRef.current || document.getElementById("scan");
-  if (!el) return;
 
-  requestAnimationFrame(() => {
-    el.scrollIntoView({ behavior: "smooth", block: "start" });
-    setTimeout(() => {
+  const scrollToScan = useCallback(() => {
+    const el = scanAnchorRef.current || document.getElementById("scan");
+    if (!el) return;
+    requestAnimationFrame(() => {
       el.scrollIntoView({ behavior: "smooth", block: "start" });
-    }, 250);
-  });
-}, []);
+      setTimeout(() => el.scrollIntoView({ behavior: "smooth", block: "start" }), 250);
+    });
+  }, []);
 
   const startCamera = useCallback(async () => {
+    // internal analytics
     trackEvent("StartScan", { method: "camera" }, "/scan");
+    // TikTok
+    trackTT("StartScan", { method: "camera" });
+
     setScanFull(false);
     stopCamera();
-     const isMobile =
-  /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 
-let stream: MediaStream;
+    let stream: MediaStream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: "user",
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
+        },
+        audio: false,
+      });
+    } catch (err) {
+      throw new Error(explainCamError(err));
+    }
 
-try {
-  stream = await navigator.mediaDevices.getUserMedia({
-    video: { facingMode: "user" },
-    audio: false,
-  });
-} catch (err) {
-  throw new Error(explainCamError(err));
-}
     streamRef.current = stream;
     const v = videoRef.current;
     if (!v) throw new Error("Video ref missing");
     v.srcObject = stream;
+
+    // iOS/Safari: play può fallire se non è user gesture, ma noi lo chiamiamo su click
     await v.play();
   }, [stopCamera]);
 
@@ -731,10 +706,9 @@ try {
     const doDetect = tickCounter % 3 === 0;
 
     let landmarks: Landmark[] | null = null;
-
     if (doDetect) {
       try {
-       landmarks = await detectFaceOnVideo(v, performance.now()); 
+        landmarks = await detectFaceOnVideo(v, performance.now());
       } catch {
         landmarks = null;
       }
@@ -752,12 +726,13 @@ try {
       return;
     }
 
-    const faceBox = computeFaceBoxFromLandmarks(landmarks, c.width, c.height, true);
+    // ✅ canvas è GIÀ mirrorato -> mirrorX = false per box/sampling coerente
+    const faceBox = computeFaceBoxFromLandmarks(landmarks, c.width, c.height, false);
     const plaus = isFacePlausible(faceBox, c.width, c.height);
-    const plaus2 = isLandmarksPlausible(landmarks, c.width, c.height, true);
+    const plaus2 = isLandmarksPlausible(landmarks, c.width, c.height, false);
 
     if (!plaus.ok || !plaus2.ok) {
-      setQualityHint("Volto non valido/stabile. Frontale, centrato, luce naturale.");
+      setQualityHint("Volto non stabile. Frontale, centrato, luce naturale.");
       setQuality(0);
       goodFramesRef.current = 0;
       stableHexesRef.current = [];
@@ -777,29 +752,48 @@ try {
 
     setQuality(smooth);
 
-    const guide = guidanceFromFace(faceBox, c.width, c.height);
-    const hint = smooth >= 0.55 ? qBase.hint : guide;
+    const hint = smooth >= 0.55 ? qBase.hint : guidanceFromFace(faceBox, c.width, c.height);
     setQualityHint(hint);
 
+    // ✅ premium sampling: 3 regioni + white balance + window più ampia
     if (smooth >= THRESHOLD) {
       goodFramesRef.current += 1;
 
       const now = performance.now();
-      if (now - lastStableSampleAtRef.current > 180) {
+      if (now - lastStableSampleAtRef.current > 170) {
         lastStableSampleAtRef.current = now;
 
-        const skin = extractSkinBaseHex({
-          ctx,
-          canvasW: c.width,
-          canvasH: c.height,
-          landmarks,
-          mirrorX: true,
-          mask: null,
-        });
+        const regions = ["forehead", "leftCheek", "rightCheek"] as const;
 
-        if (skin.ok) {
-          stableHexesRef.current.push(skin.hex);
-          if (stableHexesRef.current.length > 14) stableHexesRef.current.shift();
+        for (const region of regions) {
+          const r = extractSkinHexForRegions({
+            ctx,
+            canvasW: c.width,
+            canvasH: c.height,
+            landmarks,
+            mirrorX: false, // ✅ FIX: canvas già mirrorato
+            mask: null,
+            applyWhiteBalance: true,
+            regions: [region as any],
+          });
+
+          if (r.ok) {
+            stableHexesRef.current.push(r.hex);
+            if (stableHexesRef.current.length > 36) stableHexesRef.current.shift();
+          }
+        }
+
+        // fallback “base” se le regioni falliscono (mai 100% affidabile, ma salva sessioni)
+        if (stableHexesRef.current.length < 6) {
+          const skin = extractSkinBaseHex({
+            ctx,
+            canvasW: c.width,
+            canvasH: c.height,
+            landmarks,
+            mirrorX: false,
+            mask: null,
+          });
+          if (skin.ok) stableHexesRef.current.push(skin.hex);
         }
       }
     } else {
@@ -807,11 +801,17 @@ try {
       stableHexesRef.current = [];
     }
 
-    // ✅ FINALIZE LIVE
-    if (goodFramesRef.current >= 10 && stableHexesRef.current.length >= 10) {
+    // ✅ FINALIZE LIVE: più severo per evitare “sempre uguale”
+    if (goodFramesRef.current >= 10 && stableHexesRef.current.length >= 18) {
       goodFramesRef.current = 0;
 
       const stableHex = pickStableHex(stableHexesRef.current);
+      if (!stableHex || stableHex === "#777777") {
+        setQualityHint("Non riesco a leggere bene la pelle. Più luce naturale, niente filtri.");
+        rafRef.current = requestAnimationFrame(runTick);
+        return;
+      }
+
       const pal = makePaletteFromSamples(stableHex);
 
       const signals = getSkinSignalsFromHex(stableHex);
@@ -831,32 +831,31 @@ try {
         quality: Math.round(smooth * 100),
       };
 
-      saveLastPalette(pal, meta);
-      
+      saveLastPalette(pal, meta, stableHex, stableHexesRef.current.slice(-24));
 
-   // TikTok Pixel (conversione)
-track("ScanCompleted", {
-  method: meta.method,
-  confidence: meta.confidence,
-  quality: meta.quality,
-  undertone: meta.undertone,
-  depth: meta.depth,
-  samples: meta.sampleCount,
-});
+      // TikTok Pixel
+      trackTT("ScanCompleted", {
+        method: meta.method,
+        confidence: meta.confidence,
+        quality: meta.quality,
+        undertone: meta.undertone,
+        depth: meta.depth,
+        samples: meta.sampleCount,
+      });
 
-// DB / Telemetria interna
-trackEvent(
-  "ScanCompleted",
-  {
-    method: meta.method,
-    confidence: meta.confidence,
-    quality: meta.quality,
-    undertone: meta.undertone,
-    depth: meta.depth,
-    samples: meta.sampleCount,
-  },
-  "/scan"
-);
+      // Internal telemetry
+      trackEvent(
+        "ScanCompleted",
+        {
+          method: meta.method,
+          confidence: meta.confidence,
+          quality: meta.quality,
+          undertone: meta.undertone,
+          depth: meta.depth,
+          samples: meta.sampleCount,
+        },
+        "/scan"
+      );
 
       stopCamera();
       router.push(`/result?ts=${Date.now()}`);
@@ -867,22 +866,20 @@ trackEvent(
   }, [router, stopCamera]);
 
   const startRitual = useCallback(async () => {
-    track("StartScan", { method: "camera" });
-
     setLastFailReason(null);
     setRitual("loading");
     setQuality(0);
 
     smoothedQualityRef.current = 0;
     goodFramesRef.current = 0;
-
     stableHexesRef.current = [];
     lastStableSampleAtRef.current = 0;
     prevMotionRef.current = null;
 
     try {
-      setQualityHint(`Carico il motore… (solo la prima volta)${webgpuRef.current ? " · WebGPU ✓" : ""}`);
+      setQualityHint("Carico il motore… (solo la prima volta)");
       await startCamera();
+
       setScanFull(true);
       scrollToScan();
       setRitual("calibrating");
@@ -891,28 +888,26 @@ trackEvent(
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
       rafRef.current = requestAnimationFrame(runTick);
     } catch (e: any) {
-  const code = String(e?.message || "");
+      const code = String(e?.message || "");
 
-  if (code.startsWith("RAW:")) {
-    // RAW:<name>:<message>
-    const raw = code.slice(4);
-    setLastFailReason(`Errore camera: ${raw}`);
-    setRitual("error");
-    return;
-  }
+      if (code.startsWith("RAW:")) {
+        const raw = code.slice(4);
+        setLastFailReason(`Errore camera: ${raw}`);
+        setRitual("error");
+        return;
+      }
 
-  const map: Record<string, string> = {
-    NOT_ALLOWED: "Permesso camera negato. Clicca 🔒 nella barra e abilita la camera.",
-    NO_CAMERA: "Nessuna camera trovata su questo dispositivo.",
-    BUSY: "La camera è in uso da un’altra app/tab (Zoom/Meet/Teams). Chiudi e riprova.",
-    CONSTRAINTS: "Impostazioni camera non supportate. Ricarica la pagina.",
-    CAMERA_GENERIC: "Non riesco ad aprire la camera. Ricarica o usa ‘Carica una foto’.",
-  };
+      const map: Record<string, string> = {
+        NOT_ALLOWED: "Permesso camera negato. Clicca 🔒 nella barra e abilita la camera.",
+        NO_CAMERA: "Nessuna camera trovata su questo dispositivo.",
+        BUSY: "La camera è in uso da un’altra app/tab (Zoom/Meet/Teams). Chiudi e riprova.",
+        CONSTRAINTS: "Impostazioni camera non supportate. Ricarica la pagina.",
+      };
 
-  setLastFailReason(map[code] ?? "Non riesco ad aprire la camera. Ricarica o carica una foto.");
-  setRitual("error");
-}
-  }, [runTick, startCamera]);
+      setLastFailReason(map[code] ?? "Non riesco ad aprire la camera. Ricarica o usa ‘Carica una foto’. ");
+      setRitual("error");
+    }
+  }, [runTick, scrollToScan, startCamera]);
 
   const onPickPhoto = useCallback(() => {
     if (uploading) return;
@@ -935,18 +930,9 @@ trackEvent(
         return;
       }
 
-      // compress for stability
-      let workingFile = file;
-      try {
-        const compressedBlob = await compressImageToWebP(file, { maxSide: 1600, quality: 0.82 });
-        if (compressedBlob.size > 0 && compressedBlob.size < file.size) {
-          workingFile = new File([compressedBlob], "beorganich.webp", { type: "image/webp" });
-        }
-      } catch {
-        workingFile = file;
-      }
-
-      track("UploadPhoto", { source: "gallery" });
+      // tracking
+      trackTT("UploadPhoto", { source: "gallery" });
+      trackEvent("UploadPhoto", { source: "gallery" }, "/scan");
 
       setLastFailReason(null);
       setUploading(true);
@@ -957,6 +943,18 @@ trackEvent(
       if (fileInputRef.current) fileInputRef.current.disabled = true;
 
       try {
+        // compress for stability
+        let workingFile = file;
+        try {
+          const compressedBlob = await compressImageToWebP(file, { maxSide: 1600, quality: 0.84 });
+          if (compressedBlob.size > 0 && compressedBlob.size < file.size) {
+            workingFile = new File([compressedBlob], "unyform.webp", { type: "image/webp" });
+          }
+        } catch {
+          // keep original
+          workingFile = file;
+        }
+
         const c = canvasRef.current;
         if (!c) throw new Error("Canvas ref missing");
 
@@ -976,13 +974,11 @@ trackEvent(
           try {
             const img = new Image();
             img.src = url;
-            await img.decode();
-
+            await img.decode().catch(() => {});
             const maxSide = 1600;
             const scale = Math.min(1, maxSide / Math.max(img.naturalWidth, img.naturalHeight));
             c.width = Math.round(img.naturalWidth * scale);
             c.height = Math.round(img.naturalHeight * scale);
-
             ctx.setTransform(1, 0, 0, 1, 0, 0);
             ctx.clearRect(0, 0, c.width, c.height);
             ctx.drawImage(img, 0, 0, c.width, c.height);
@@ -994,7 +990,6 @@ trackEvent(
           const scale = Math.min(1, maxSide / Math.max(bmp.width, bmp.height));
           c.width = Math.round(bmp.width * scale);
           c.height = Math.round(bmp.height * scale);
-
           ctx.setTransform(1, 0, 0, 1, 0, 0);
           ctx.clearRect(0, 0, c.width, c.height);
           ctx.drawImage(bmp, 0, 0, c.width, c.height);
@@ -1010,16 +1005,15 @@ trackEvent(
           return;
         }
 
-        const mirrorX = pickBestMirrorForImage(landmarks, c.width, c.height);
-
-        const plausL = isLandmarksPlausible(landmarks, c.width, c.height, mirrorX);
+        // upload: niente mirror. (il tuo engine dovrebbe già gestire orientamento via decode)
+        const plausL = isLandmarksPlausible(landmarks, c.width, c.height, false);
         if (!plausL.ok) {
-          setLastFailReason("Non riesco a riconoscere un volto valido. Prova: viso frontale, più vicino, luce naturale.");
+          setLastFailReason("Volto non riconosciuto. Prova: viso frontale, più vicino, luce naturale.");
           setRitual("error");
           return;
         }
 
-        const faceBox = computeFaceBoxFromLandmarks(landmarks, c.width, c.height, mirrorX);
+        const faceBox = computeFaceBoxFromLandmarks(landmarks, c.width, c.height, false);
         const plaus = isFacePlausible(faceBox, c.width, c.height);
         if (!plaus.ok) {
           setLastFailReason("La foto non sembra un volto valido (troppo lontano / tagliato / non frontale).");
@@ -1042,7 +1036,7 @@ trackEvent(
           return;
         }
 
-        // 3) segmentation
+        // 3) segmentation (best effort)
         let mask: any = null;
         try {
           mask = await segmentPersonOnImage(c);
@@ -1050,83 +1044,39 @@ trackEvent(
           mask = null;
         }
 
-        // multi-sample regional extraction
-        let hexes: string[] = [];
+        // 4) multi-sample regional extraction (premium)
+        const hexes: string[] = [];
+        const regions = ["forehead", "leftCheek", "rightCheek"] as const;
 
-        // with mask
-        for (let i = 0; i < 8; i++) {
-          const f = extractSkinHexForRegions({
-            ctx,
-            canvasW: c.width,
-            canvasH: c.height,
-            landmarks,
-            mirrorX,
-            mask: mask ?? null,
-            applyWhiteBalance: false,
-            regions: ["forehead"],
-          });
-          const l = extractSkinHexForRegions({
-            ctx,
-            canvasW: c.width,
-            canvasH: c.height,
-            landmarks,
-            mirrorX,
-            mask: mask ?? null,
-            applyWhiteBalance: false,
-            regions: ["leftCheek"],
-          });
-          const r = extractSkinHexForRegions({
-            ctx,
-            canvasW: c.width,
-            canvasH: c.height,
-            landmarks,
-            mirrorX,
-            mask: mask ?? null,
-            applyWhiteBalance: false,
-            regions: ["rightCheek"],
-          });
-          if (f.ok) hexes.push(f.hex);
-          if (l.ok) hexes.push(l.hex);
-          if (r.ok) hexes.push(r.hex);
-        }
-
-        // fallback no mask
-        if (hexes.length < 10) {
-          hexes = [];
-          for (let i = 0; i < 10; i++) {
-            const f = extractSkinHexForRegions({
-              ctx,
-              canvasW: c.width,
-              canvasH: c.height,
-              landmarks,
-              mirrorX,
-              mask: null,
-              applyWhiteBalance: false,
-              regions: ["forehead"],
-            });
-            const l = extractSkinHexForRegions({
-              ctx,
-              canvasW: c.width,
-              canvasH: c.height,
-              landmarks,
-              mirrorX,
-              mask: null,
-              applyWhiteBalance: false,
-              regions: ["leftCheek"],
-            });
+        // with mask (if any)
+        for (let i = 0; i < 10; i++) {
+          for (const region of regions) {
             const r = extractSkinHexForRegions({
               ctx,
               canvasW: c.width,
               canvasH: c.height,
               landmarks,
-              mirrorX,
-              mask: null,
-              applyWhiteBalance: false,
-              regions: ["rightCheek"],
+              mirrorX: false,
+              mask: mask ?? null,
+              applyWhiteBalance: true,
+              regions: [region as any],
             });
-            if (f.ok) hexes.push(f.hex);
-            if (l.ok) hexes.push(l.hex);
             if (r.ok) hexes.push(r.hex);
+          }
+        }
+
+        // fallback base if still low
+        if (hexes.length < 10) {
+          for (let i = 0; i < 6; i++) {
+            const base = extractSkinBaseHex({
+              ctx,
+              canvasW: c.width,
+              canvasH: c.height,
+              landmarks,
+              mirrorX: false,
+              mask: mask ?? null,
+            });
+            if (base.ok) hexes.push(base.hex);
           }
         }
 
@@ -1137,6 +1087,12 @@ trackEvent(
         }
 
         const stableHex = pickStableHex(hexes);
+        if (!stableHex || stableHex === "#777777") {
+          setLastFailReason("Non riesco a determinare un colore stabile. Prova luce naturale e foto più ravvicinata.");
+          setRitual("error");
+          return;
+        }
+
         const pal = makePaletteFromSamples(stableHex);
 
         const signals = getSkinSignalsFromHex(stableHex);
@@ -1152,46 +1108,37 @@ trackEvent(
           quality: Math.round(combined * 100),
         };
 
-        saveLastPalette(pal, meta);
+        saveLastPalette(pal, meta, stableHex, hexes.slice(-24));
 
-     track("ScanCompleted", {
-  method: meta.method,
-  confidence: meta.confidence,
-  quality: meta.quality,
-  undertone: meta.undertone,
-  depth: meta.depth,
-  samples: meta.sampleCount,
-});
+        // TikTok Pixel
+        trackTT("ScanCompleted", {
+          method: meta.method,
+          confidence: meta.confidence,
+          quality: meta.quality,
+          undertone: meta.undertone,
+          depth: meta.depth,
+          samples: meta.sampleCount,
+        });
 
-trackEvent(
-  "ScanCompleted",
-  {
-    method: meta.method,
-    confidence: meta.confidence,
-    quality: meta.quality,
-    undertone: meta.undertone,
-    depth: meta.depth,
-    samples: meta.sampleCount,
-  },
-  "/scan"
-);
-setScanFull(false);
-router.push(`/result?ts=${Date.now()}`);
-trackEvent(
-  "ScanCompleted",
-  {
-    method: meta.method,
-    confidence: meta.confidence,
-    quality: meta.quality,
-    undertone: meta.undertone,
-    depth: meta.depth,
-    samples: meta.sampleCount,
-  },
-  "/scan"
-);
+        // internal telemetry
+        trackEvent(
+          "ScanCompleted",
+          {
+            method: meta.method,
+            confidence: meta.confidence,
+            quality: meta.quality,
+            undertone: meta.undertone,
+            depth: meta.depth,
+            samples: meta.sampleCount,
+          },
+          "/scan"
+        );
+
+        setScanFull(false);
         setRitual("idle");
         router.push(`/result?ts=${Date.now()}`);
-      } catch {
+      } catch (e: any) {
+        console.error("UPLOAD ERROR:", e);
         setLastFailReason("Errore nel caricamento foto. Riprova.");
         setRitual("error");
       } finally {
@@ -1227,8 +1174,6 @@ trackEvent(
           onUploadFile(file);
         }}
       />
-
-
 
       {/* Content */}
       <main className="mx-auto max-w-6xl px-5 pb-28 pt-10">
@@ -1287,84 +1232,98 @@ trackEvent(
               <div className="scanTrustTitle">Privacy by design</div>
               <div className="scanTrustText">Il calcolo avviene sul tuo dispositivo. Nessun upload automatico.</div>
             </div>
+
+            {debug && (
+              <div className="card subtleCard">
+                <div className="cardText">
+                  <div className="text-white/80 text-[12px]">DEBUG</div>
+                  <div className="text-white/60 text-[12px] mt-1">
+                    samples: {stableHexesRef.current.length} · goodFrames: {goodFramesRef.current}
+                  </div>
+                  <div className="text-white/60 text-[12px] mt-1 font-mono break-all">
+                    last: {stableHexesRef.current.slice(-8).join(" · ")}
+                  </div>
+                </div>
+              </div>
+            )}
           </section>
 
- {/* RIGHT */}
-<section
-  className={[
-"space-y-4",
-    scanFull ? "fixed inset-0 z-50 bg-black p-5 pt-6 overflow-auto lg:static lg:z-auto lg:p-0" : "",
-  ].join(" ")}
->{scanFull && (
-  <div className="flex items-center justify-between pb-3 lg:hidden">
-    <div className="text-[12px] tracking-[0.22em] text-white/65">{BRAND}</div>
-    <button
-      onClick={() => {
-        setScanFull(false);
-        stopCamera();
-      }}
-      className="pillButton subtle"
-    >
-      Chiudi
-    </button>
-  </div>
-)}
-  {/* 👇 ANCHOR (UNO SOLO) */}
-  <div ref={scanAnchorRef} id="scan" className="scroll-mt-24" />
+          {/* RIGHT */}
+          <section
+            className={[
+              "space-y-4",
+              scanFull ? "fixed inset-0 z-50 bg-black p-5 pt-6 overflow-auto lg:static lg:z-auto lg:p-0" : "",
+            ].join(" ")}
+          >
+            {scanFull && (
+              <div className="flex items-center justify-between pb-3 lg:hidden">
+                <div className="text-[12px] tracking-[0.22em] text-white/65">{BRAND}</div>
+                <button
+                  onClick={() => {
+                    setScanFull(false);
+                    stopCamera();
+                    setRitual("idle");
+                    setQuality(0);
+                    setQualityHint("Analisi discreta. Nessuna foto salvata.");
+                    stableHexesRef.current = [];
+                    goodFramesRef.current = 0;
+                  }}
+                  className="pillButton subtle"
+                >
+                  Chiudi
+                </button>
+              </div>
+            )}
 
-  <div className="scanShell">
-    <div className="scanAurora" aria-hidden />
-    <div className="scanNoise" aria-hidden />
+            {/* 👇 ANCHOR */}
+            <div ref={scanAnchorRef} id="scan" className="scroll-mt-24" />
 
-    <div className="scanFrame">
-      <video
-        ref={videoRef}
-        playsInline
-        muted
-        className={[
-          "scanVideo",
-          ritual === "calibrating" || ritual === "loading" ? "on" : "off",
-        ].join(" ")}
-      />
+            <div className="scanShell">
+              <div className="scanAurora" aria-hidden />
+              <div className="scanNoise" aria-hidden />
 
-      <div className="scanVignette" aria-hidden />
+              <div className="scanFrame">
+                <video
+                  ref={videoRef}
+                  playsInline
+                  muted
+                  className={["scanVideo", ritual === "calibrating" || ritual === "loading" ? "on" : "off"].join(" ")}
+                />
 
-      <div className="scanOverlay">
-        <div className="scanTopRow">
-          <div className="scanChip">
-            {ritual === "loading"
-              ? "Avvio…"
-              : ritual === "calibrating"
-              ? "Calibrazione"
-              : "Pronto"}
-          </div>
-          <div className="scanChip subtle">
-            Qualità <span className="tabular-nums">{percent}%</span>
-          </div>
-        </div>
+                <div className="scanVignette" aria-hidden />
 
-        <div className={["scanRing", ritual === "calibrating" ? "pulse" : ""].join(" ")} />
+                <div className="scanOverlay">
+                  <div className="scanTopRow">
+                    <div className="scanChip">
+                      {ritual === "loading" ? "Avvio…" : ritual === "calibrating" ? "Calibrazione" : "Pronto"}
+                    </div>
+                    <div className="scanChip subtle">
+                      Qualità <span className="tabular-nums">{percent}%</span>
+                    </div>
+                  </div>
 
-        <div className="scanBottom">
-          <div className="scanHint">{qualityHint}</div>
+                  <div className={["scanRing", ritual === "calibrating" ? "pulse" : ""].join(" ")} />
 
-          <div className="scanBar">
-            <div className="scanFill" style={{ width: `${percent}%` }} />
-            <div className="scanTarget" style={{ left: `${Math.round(THRESHOLD * 100)}%` }} />
-          </div>
+                  <div className="scanBottom">
+                    <div className="scanHint">{qualityHint}</div>
 
-          <div className="scanMeta">
-            <span className="scanMetaItem">Target: {Math.round(THRESHOLD * 100)}%</span>
-            <span className="scanMetaSep">•</span>
-            <span className="scanMetaItem">Face engine: ON</span>
-          </div>
-        </div>
-      </div>
+                    <div className="scanBar">
+                      <div className="scanFill" style={{ width: `${percent}%` }} />
+                      <div className="scanTarget" style={{ left: `${Math.round(THRESHOLD * 100)}%` }} />
+                    </div>
 
-      <canvas ref={canvasRef} className="hidden" />
-    </div>
-  </div>
-</section>
+                    <div className="scanMeta">
+                      <span className="scanMetaItem">Target: {Math.round(THRESHOLD * 100)}%</span>
+                      <span className="scanMetaSep">•</span>
+                      <span className="scanMetaItem">Face engine: ON</span>
+                    </div>
+                  </div>
+                </div>
+
+                <canvas ref={canvasRef} className="hidden" />
+              </div>
+            </div>
+          </section>
         </div>
       </main>
 
