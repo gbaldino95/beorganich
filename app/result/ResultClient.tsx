@@ -206,35 +206,45 @@ const [selectedColor, setSelectedColor] = useState<PaletteColor | null>(null);
   }, [toast]);
 
   const palette = data?.palette ?? [];
-  const groupLabel: Record<PaletteGroupKey, string> = {
-  core: "CORE",
-  soft: "SOFT",
-  deep: "DEEP",
-  accent: "ACCENT",
+ // ===============================
+// PALETTE GROUPS (USER FRIENDLY)
+// ===============================
+const has48 = palette.length >= 48;
+
+const groupLabel: Record<PaletteGroupKey, string> = {
+  core: "ESSENZIALI",
+  soft: "CHIARI",
+  deep: "SCURI",
+  accent: "DETTAGLI",
 };
 
 const groupSub: Record<PaletteGroupKey, string> = {
-  core: "Fondamenta quotidiana: pulita, costosa, sempre coerente.",
-  soft: "Toni morbidi: luce sul viso, effetto ‘curato’ immediato.",
-  deep: "Struttura: contrasto controllato, più authority (sera/meeting).",
-  accent: "Dettaglio: micro-tocchi che alzano il look senza urlare.",
+  core: "I colori più facili: ti stanno bene sempre.",
+  soft: "Illuminano il viso: perfetti sopra (maglia/camicia).",
+  deep: "Danno presenza: ideali per sera, ufficio, blazer.",
+  accent: "Tocchi piccoli: accessori e dettagli premium.",
 };
 
-const grouped = useMemo(() => {
-  const p = palette ?? [];
+const grouped = useMemo<Record<PaletteGroupKey, PaletteColor[]>>(() => {
+  const p = palette;
   return {
     core: p.slice(0, 12),
     soft: p.slice(12, 24),
     deep: p.slice(24, 36),
     accent: p.slice(36, 48),
-  } as Record<PaletteGroupKey, PaletteColor[]>;
+  };
 }, [palette]);
 
-const activeColors = useMemo(() => {
+const activeColors = useMemo<PaletteColor[]>(() => {
+  if (!has48) return palette;
   const list = grouped[activeGroup] ?? [];
-  return list.length ? list : (palette ?? []);
-}, [grouped, activeGroup, palette]);
+  return list.length ? list : palette;
+}, [has48, grouped, activeGroup, palette]);
 
+// ✅ Questo è quello che devi usare nella grid
+const visibleColors = useMemo<PaletteColor[]>(() => {
+  return has48 ? activeColors : palette;
+}, [has48, activeColors, palette]);
 function describeColor(hex: string, group: PaletteGroupKey): ColorDescriptor {
   // base descriptor “sempre vero”
   const lum = luminance01(hex);
@@ -514,10 +524,14 @@ function roundRect(
   };
 
   const scrollToPalette = () => {
-    const el = document.getElementById("palette");
-    if (!el) return;
-    requestAnimationFrame(() => el.scrollIntoView({ behavior: "smooth", block: "start" }));
-  };
+  const el = document.getElementById("palette-export");
+  if (!el) return;
+
+  el.scrollIntoView({ behavior: "smooth", block: "start" });
+
+  // micro feedback premium
+  setToast("Palette aperta ✨");
+};
 
   const onSubmitEmail = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -661,16 +675,39 @@ function roundRect(
     </div>
   </div>
 
-  {/* CTA row */}
-  <div className="mt-6 flex flex-col sm:flex-row gap-2">
-    <div className="mt-6 text-[12px] uppercase tracking-[0.18em] text-white/40">
-  Personal palette
-</div>
+  {/* CTA — High conversion scroll to palette */}
+<div className="mt-6">
+  <button
+    type="button"
+    onClick={scrollToPalette}
+    className="
+      w-full rounded-3xl
+      border border-white/15
+      bg-white/[0.04]
+      px-5 py-5
+      backdrop-blur
+      transition
+      hover:bg-white/[0.08]
+      hover:border-white/25
+      active:scale-[0.99]
+    "
+  >
+    <div className="flex items-center justify-between gap-4">
+      <div className="text-left">
+        <div className="text-[16px] font-semibold text-white/95">
+          La tua palette è pronta
+        </div>
+        <div className="mt-1 text-[13px] text-white/60">
+          Questi sono i colori che ti fanno sembrare più curato.
+        </div>
+      </div>
 
-    <button className="mt-4 text-[14px] text-white/60 underline underline-offset-4">
-  Rifai lo scan
-</button>
-  </div>
+      <div className="shrink-0 rounded-full bg-white px-4 py-2 text-[13px] font-semibold text-black shadow-[0_6px_20px_rgba(255,255,255,0.25)]">
+        Apri →
+      </div>
+    </div>
+  </button>
+</div>
 
   <div className="mt-4 text-center text-[12px] text-white/45">
     Tip: salva la palette e usala come “uniform” quando compri.
@@ -712,34 +749,49 @@ function roundRect(
   {/* header tabs */}
   <div className="flex items-center justify-between gap-3">
     <div>
-      <div className="text-[12px] tracking-[0.22em] text-white/45 uppercase">Palette system</div>
-      <div className="mt-1 text-[12px] text-white/55">{groupSub[activeGroup]}</div>
+      <div className="text-[12px] tracking-[0.22em] text-white/45 uppercase">
+        Palette system
+      </div>
+
+      <div className="mt-1 text-[12px] text-white/55">
+        {has48
+          ? groupSub[activeGroup]
+          : "Questi sono i colori che ti valorizzano di più. Usali come riferimento fisso."}
+      </div>
     </div>
 
-    <div className="flex items-center gap-1 rounded-full border border-white/10 bg-white/[0.02] p-1">
-      {(Object.keys(groupLabel) as PaletteGroupKey[]).map((k) => (
-        <button
-          key={k}
-          type="button"
-          onClick={() => setActiveGroup(k)}
-          className={[
-            "h-9 rounded-full px-3 sm:px-4 text-[11px] sm:text-[12px] tracking-[0.16em] uppercase transition",
-            k === activeGroup
-              ? "bg-white text-black shadow-[0_14px_40px_rgba(255,255,255,0.12)]"
-              : "text-white/65 hover:text-white hover:bg-white/[0.06]",
-          ].join(" ")}
-        >
-          {groupLabel[k]}
-        </button>
-      ))}
-    </div>
+    {has48 && (
+      <div className="flex items-center gap-1 rounded-full border border-white/10 bg-white/[0.02] p-1">
+        {(Object.keys(groupLabel) as PaletteGroupKey[]).map((k) => (
+          <button
+            key={k}
+            type="button"
+            onClick={() => setActiveGroup(k)}
+            className={[
+              "h-9 rounded-full px-3 sm:px-4 text-[11px] sm:text-[12px] tracking-[0.16em] uppercase transition",
+              k === activeGroup
+                ? "bg-white text-black shadow-[0_14px_40px_rgba(255,255,255,0.12)]"
+                : "text-white/65 hover:text-white hover:bg-white/[0.06]",
+            ].join(" ")}
+          >
+            {groupLabel[k]}
+          </button>
+        ))}
+      </div>
+    )}
   </div>
 
   {/* grid */}
   <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
-    {activeColors.map((c) => {
+    {visibleColors.map((c) => {
       const d = describeColor(c.hex, activeGroup);
+const usageText = has48
+  ? d.usage
+  : "Colore chiave della tua palette. Funziona sempre su di te.";
 
+const piecesText = has48
+  ? d.pieces
+  : "Maglia · camicia · pantalone · capospalla pulito";
       return (
         <button
           key={`${activeGroup}-${c.name}-${c.hex}`}
@@ -783,8 +835,8 @@ function roundRect(
             </div>
 
             {/* ✅ DICITURE PREMIUM sotto HEX */}
-            <div className="mt-2 text-[12px] leading-5 text-white/70">{d.usage}</div>
-            <div className="mt-2 text-[12px] leading-5 text-white/45">{d.pieces}</div>
+            <div className="mt-2 text-[12px] leading-5 text-white/70">{usageText}</div>
+<div className="mt-2 text-[12px] leading-5 text-white/45">{piecesText}</div>
           </div>
         </button>
       );
