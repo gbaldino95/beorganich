@@ -10,7 +10,50 @@ import ProductsCarousel from "@/app/components/ProductsCarousel";
 import type { PaletteItem } from "@/app/lib/paletteLogic";
 
 type PaletteColor = { name: string; hex: string; style?: string };
+type PaletteGroupKey = "core" | "soft" | "deep" | "accent";
 
+type ColorDescriptor = {
+  time: "DAY" | "ALL DAY" | "NIGHT";
+  role: "BASE" | "STRUCTURE" | "HERO" | "ACCENT";
+  usage: string;   // riga 1 sotto hex
+  pieces: string;  // riga 2 sotto hex
+};
+
+function clamp01(n: number) {
+  return Math.max(0, Math.min(1, n));
+}
+
+function hexToRgb(hex: string) {
+  const h = (hex || "").replace("#", "").trim();
+  const hh = h.length === 3 ? h.split("").map((c) => c + c).join("") : h.padEnd(6, "0").slice(0, 6);
+  const r = parseInt(hh.slice(0, 2), 16) || 0;
+  const g = parseInt(hh.slice(2, 4), 16) || 0;
+  const b = parseInt(hh.slice(4, 6), 16) || 0;
+  return { r, g, b };
+}
+
+// luminanza percettiva 0..1 (stabile e veloce)
+function luminance01(hex: string) {
+  const { r, g, b } = hexToRgb(hex);
+  return clamp01((0.2126 * r + 0.7152 * g + 0.0722 * b) / 255);
+}
+
+// “saturazione” grezza 0..1 (quanto è colorato vs neutro)
+function chroma01(hex: string) {
+  const { r, g, b } = hexToRgb(hex);
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  return clamp01((max - min) / 255);
+}
+
+// warm/cool veloce: confronta componenti (senza Lab)
+function temperature(hex: string) {
+  const { r, g, b } = hexToRgb(hex);
+  const warmScore = (r + g * 0.35) - b; // + = warm
+  if (warmScore > 35) return "warm";
+  if (warmScore < -35) return "cool";
+  return "neutral";
+}
 type ResultData = {
   styleName?: string;
   styleTag?: string;
@@ -123,7 +166,8 @@ export default function ResultClient() {
 
   // --- Sheet
   const [paletteOpen, setPaletteOpen] = useState(false);
-
+const [activeGroup, setActiveGroup] = useState<PaletteGroupKey>("core");
+const [selectedColor, setSelectedColor] = useState<PaletteColor | null>(null);
   useEffect(() => {
     const fromStorage = readLastResultFromStorage();
     const KEYS = [
@@ -162,6 +206,94 @@ export default function ResultClient() {
   }, [toast]);
 
   const palette = data?.palette ?? [];
+  const groupLabel: Record<PaletteGroupKey, string> = {
+  core: "CORE",
+  soft: "SOFT",
+  deep: "DEEP",
+  accent: "ACCENT",
+};
+
+const groupSub: Record<PaletteGroupKey, string> = {
+  core: "Fondamenta quotidiana: pulita, costosa, sempre coerente.",
+  soft: "Toni morbidi: luce sul viso, effetto ‘curato’ immediato.",
+  deep: "Struttura: contrasto controllato, più authority (sera/meeting).",
+  accent: "Dettaglio: micro-tocchi che alzano il look senza urlare.",
+};
+
+const grouped = useMemo(() => {
+  const p = palette ?? [];
+  return {
+    core: p.slice(0, 12),
+    soft: p.slice(12, 24),
+    deep: p.slice(24, 36),
+    accent: p.slice(36, 48),
+  } as Record<PaletteGroupKey, PaletteColor[]>;
+}, [palette]);
+
+const activeColors = useMemo(() => {
+  const list = grouped[activeGroup] ?? [];
+  return list.length ? list : (palette ?? []);
+}, [grouped, activeGroup, palette]);
+
+function describeColor(hex: string, group: PaletteGroupKey): ColorDescriptor {
+  // base descriptor “sempre vero”
+  const lum = luminance01(hex);
+  const chr = chroma01(hex);
+  const temp = temperature(hex);
+
+  const isDark = lum < 0.33;
+  const isLight = lum > 0.72;
+  const isNeutral = chr < 0.14;
+
+  const material =
+    isNeutral ? "lana merino · cotton heavy · twill" : "knit fine · popeline · satin opaco";
+
+  const base: ColorDescriptor = {
+    time: isDark ? "ALL DAY" : "DAY",
+    role: "BASE",
+    usage: isNeutral
+      ? "Base di lusso: la usi spesso, resta sempre ‘clean’."
+      : "Base raffinata: valorizza il viso senza risultare ‘colorata’.",
+    pieces: `T-shirt · camicia · pantalone · cappotto (${material})`,
+  };
+
+  if (group === "soft") {
+    return {
+      time: "DAY",
+      role: "HERO",
+      usage: isLight
+        ? "Illumina il viso. Perfetto in alto (maglia/camicia)."
+        : "Ammorbidisce il look: effetto curato, zero sforzo.",
+      pieces: "Maglia · camicia · knit · layer leggero · sneakers pulite",
+    };
+  }
+
+  if (group === "deep") {
+    return {
+      time: "NIGHT",
+      role: "STRUCTURE",
+      usage: "Struttura e presenza: contrasto controllato (sera/meeting).",
+      pieces: "Blazer · cappotto · denim scuro · pantalone tailored · pelle/eco",
+    };
+  }
+
+  if (group === "accent") {
+    return {
+      time: "ALL DAY",
+      role: "ACCENT",
+      usage:
+        temp === "warm"
+          ? "Accento caldo: usa in dettagli piccoli. Sembra subito premium."
+          : temp === "cool"
+          ? "Accento freddo: dettaglio pulito, moderno, zero caos."
+          : "Accento neutro: micro-tocco che alza il look senza urlare.",
+      pieces: "Accessori · piping · logo minimo · calze · cappello · tote",
+    };
+  }
+
+  // core
+  return base;
+}
 const onSavePaletteToGallery = async () => {
   try {
     if (!palette?.length) {
@@ -279,6 +411,7 @@ function roundRect(
   ctx.arcTo(x, y, x + w, y, radius);
   ctx.closePath();
 }
+
   // active dot logic
   useEffect(() => {
     const el = paletteScrollRef.current;
@@ -574,40 +707,93 @@ function roundRect(
               </button>
             </div>
           </div>
-          {/* PALETTE GRID — ULTRA PRO */}
-<div className="mt-6 space-y-4">
-  <div className="text-[12px] uppercase tracking-[0.22em] text-white/40">
-    Palette personale
+          {/* PALETTE GRID — 48 / 4 GROUPS */}
+<div className="mt-6">
+  {/* header tabs */}
+  <div className="flex items-center justify-between gap-3">
+    <div>
+      <div className="text-[12px] tracking-[0.22em] text-white/45 uppercase">Palette system</div>
+      <div className="mt-1 text-[12px] text-white/55">{groupSub[activeGroup]}</div>
+    </div>
+
+    <div className="flex items-center gap-1 rounded-full border border-white/10 bg-white/[0.02] p-1">
+      {(Object.keys(groupLabel) as PaletteGroupKey[]).map((k) => (
+        <button
+          key={k}
+          type="button"
+          onClick={() => setActiveGroup(k)}
+          className={[
+            "h-9 rounded-full px-3 sm:px-4 text-[11px] sm:text-[12px] tracking-[0.16em] uppercase transition",
+            k === activeGroup
+              ? "bg-white text-black shadow-[0_14px_40px_rgba(255,255,255,0.12)]"
+              : "text-white/65 hover:text-white hover:bg-white/[0.06]",
+          ].join(" ")}
+        >
+          {groupLabel[k]}
+        </button>
+      ))}
+    </div>
   </div>
 
-  <div className="grid grid-cols-2 gap-4">
-    {palette.map((c, i) => (
-      <div
-        key={`${c.name}-${c.hex}`}
-        className="relative rounded-3xl bg-white/[0.04] p-4 backdrop-blur-xl border border-white/10"
-      >
-        <div className="h-32 rounded-2xl border border-white/10" style={{ backgroundColor: c.hex }} />
+  {/* grid */}
+  <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
+    {activeColors.map((c) => {
+      const d = describeColor(c.hex, activeGroup);
 
-        <div className="mt-4 space-y-1">
-          <div className="text-[16px] font-medium tracking-tight text-white/90">
-            {c.name}
+      return (
+        <button
+          key={`${activeGroup}-${c.name}-${c.hex}`}
+          type="button"
+          onClick={() => {
+            setSelectedColor(c);
+            setPaletteOpen(true);
+          }}
+          className="
+            group text-left rounded-3xl border border-white/10
+            bg-white/[0.03] p-3 sm:p-4
+            transition hover:bg-white/[0.06] hover:border-white/20
+            active:scale-[0.99]
+          "
+        >
+          <div className="relative">
+            <div
+              className="h-28 sm:h-32 rounded-2xl border border-white/10"
+              style={{ background: c.hex }}
+            />
+            <div
+              aria-hidden
+              className="pointer-events-none absolute -inset-6 rounded-[28px] opacity-20 blur-2xl transition group-hover:opacity-30"
+              style={{ background: c.hex }}
+            />
           </div>
 
-          <div className="text-[12px] text-white/55 font-mono">
-            {c.hex?.toUpperCase()}
-          </div>
+          <div className="mt-3">
+            <div className="text-[15px] sm:text-[16px] font-semibold text-white/90 leading-tight">
+              {c.name}
+            </div>
 
-          <div className="mt-3 text-[12px] text-white/55 leading-snug">
-            {i === 0 ? "Colore base. Costruisce il tuo look." : "Usalo per capi chiave e layering."}
+            <div className="mt-1 flex items-center justify-between gap-2">
+              <div className="text-[12px] text-white/55 font-mono">{c.hex.toUpperCase()}</div>
+
+              <div className="flex items-center gap-1">
+                <span className="text-[10px] tracking-[0.18em] uppercase text-white/45">{d.time}</span>
+                <span className="text-white/25">•</span>
+                <span className="text-[10px] tracking-[0.18em] uppercase text-white/45">{d.role}</span>
+              </div>
+            </div>
+
+            {/* ✅ DICITURE PREMIUM sotto HEX */}
+            <div className="mt-2 text-[12px] leading-5 text-white/70">{d.usage}</div>
+            <div className="mt-2 text-[12px] leading-5 text-white/45">{d.pieces}</div>
           </div>
-        </div>
-      </div>
-    ))}
+        </button>
+      );
+    })}
   </div>
 
-  <p className="text-[13px] text-white/50 leading-6">
-    Scegli un colore della palette e mantienilo nei capi principali. Il risultato sarà sempre coerente.
-  </p>
+  <div className="mt-3 text-[12px] text-white/40">
+    Tip pro: CORE 60–70% · SOFT 15–25% · DEEP 10–20% · ACCENT 5–10%.
+  </div>
 </div>
 
           {/* vibe box */}
@@ -713,7 +899,10 @@ function roundRect(
           {/* backdrop (tap fuori chiude) */}
           <button
             type="button"
-            onClick={() => setPaletteOpen(false)}
+            onClick={() => {
+  setPaletteOpen(false);
+  setSelectedColor(null);
+}}
             className="absolute inset-0 z-0 bg-black/60 backdrop-blur-sm"
             aria-label="Chiudi"
           />
@@ -738,7 +927,10 @@ function roundRect(
                 <div className="mt-3 flex justify-center">
                   <button
                     type="button"
-                    onClick={() => setPaletteOpen(false)}
+                    onClick={() => {
+  setPaletteOpen(false);
+  setSelectedColor(null);
+}}
                     className="w-full max-w-[260px] h-11 rounded-2xl border border-white/15 bg-white/[0.03] text-[14px] text-white/85 hover:bg-white/[0.06] transition active:scale-[0.99]"
                   >
                     Torna indietro
@@ -748,8 +940,28 @@ function roundRect(
 
               {/* content scroll (NO taglio) */}
               <div className="px-5 pt-4 pb-[calc(env(safe-area-inset-bottom)+18px)] max-h-[70vh] overflow-y-auto">
+                {selectedColor && (
+  <div className="mb-4 rounded-3xl border border-white/10 bg-white/[0.03] p-4">
+    <div className="flex items-center gap-4">
+      <div
+        className="h-16 w-16 rounded-3xl border border-white/10"
+        style={{ background: selectedColor.hex }}
+      />
+      <div className="min-w-0">
+        <div className="text-[16px] font-semibold text-white/90 truncate">{selectedColor.name}</div>
+        <div className="mt-1 text-[12px] text-white/55 font-mono">{selectedColor.hex.toUpperCase()}</div>
+        <div className="mt-2 text-[12px] text-white/65 leading-5">
+          {describeColor(selectedColor.hex, activeGroup).usage}
+        </div>
+        <div className="mt-1 text-[12px] text-white/45 leading-5">
+          {describeColor(selectedColor.hex, activeGroup).pieces}
+        </div>
+      </div>
+    </div>
+  </div>
+)}
                 <div className="grid gap-3 sm:grid-cols-2">
-                  {palette.map((c) => (
+                  {activeColors.map((c) => (
                     <div
                       key={`${c.name}-${c.hex}-sheet`}
                       className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 flex items-center gap-4"
@@ -758,10 +970,21 @@ function roundRect(
                         className="h-14 w-14 rounded-2xl border border-white/10"
                         style={{ background: c.hex }}
                       />
-                      <div className="min-w-0">
-                        <div className="text-[14px] font-semibold text-white/90 truncate">{c.name}</div>
-                        <div className="text-[12px] text-white/55 font-mono">{c.hex}</div>
-                      </div>
+                     <div className="min-w-0">
+  <div className="text-[14px] font-semibold text-white/90 truncate">{c.name}</div>
+  <div className="text-[12px] text-white/55 font-mono">{c.hex}</div>
+
+  {/* ✅ DICITURE PREMIUM sotto HEX */}
+  {(() => {
+  const d = describeColor(c.hex, activeGroup);
+  return (
+    <>
+      <div className="mt-2 text-[12px] leading-5 text-white/70">{d.usage}</div>
+      <div className="mt-1 text-[12px] leading-5 text-white/45">{d.pieces}</div>
+    </>
+  );
+})()}
+</div>
                     </div>
                   ))}
                 </div>
