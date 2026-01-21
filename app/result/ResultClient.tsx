@@ -574,90 +574,41 @@ function roundRect(
               </button>
             </div>
           </div>
+          {/* PALETTE GRID — ULTRA PRO */}
+<div className="mt-6 space-y-4">
+  <div className="text-[12px] uppercase tracking-[0.22em] text-white/40">
+    Palette personale
+  </div>
 
-          {/* PALETTE SPOTLIGHT */}
-          <div className="mt-5 rounded-3xl border border-white/10 bg-black/20 overflow-hidden">
-            <div className="flex items-center justify-between px-4 pt-4">
-              <div className="text-[12px] tracking-[0.22em] text-white/55 uppercase">
-                Palette spotlight
-              </div>
+  <div className="grid grid-cols-2 gap-4">
+    {palette.map((c, i) => (
+      <div
+        key={`${c.name}-${c.hex}`}
+        className="relative rounded-3xl bg-white/[0.04] p-4 backdrop-blur-xl border border-white/10"
+      >
+        <div className="h-32 rounded-2xl border border-white/10" style={{ backgroundColor: c.hex }} />
 
-              <button
-                type="button"
-                onClick={() => setPaletteOpen(true)}
-                className="rounded-full border border-white/15 bg-white/[0.03] px-3 py-2 text-[12px] text-white/75 hover:bg-white/[0.06] transition active:scale-[0.99]"
-              >
-                Espandi
-              </button>
-            </div>
-
-            <div className="px-4 -mt-1 pb-2 text-[12px] text-white/45">
-              Scorri → per vedere tutta la palette
-            </div>
-
-            <div className="relative">
-              <div className="pointer-events-none absolute inset-y-0 left-0 w-10 bg-gradient-to-r from-black/60 to-transparent z-10" />
-              <div className="pointer-events-none absolute inset-y-0 right-0 w-10 bg-gradient-to-l from-black/60 to-transparent z-10" />
-
-              <div
-                ref={paletteScrollRef}
-                className="mt-1 flex gap-4 overflow-x-auto px-4 pb-4 no-scrollbar snap-x snap-mandatory"
-              >
-                {palette.map((c, i) => (
-                  <button
-                    key={`${c.name}-${c.hex}`}
-                    data-swatch-card
-                    type="button"
-                    onClick={() => setPaletteOpen(true)}
-                    className="
-  snap-center shrink-0 w-[78%] sm:w-[420px]
-  rounded-3xl border border-white/12 bg-white/[0.035]
-  p-4 text-left transition
-  hover:bg-white/[0.06] hover:border-white/20
-  active:scale-[0.985]
-"
-                  >
-                    <div className="flex items-center gap-4">
-                      <div className="relative">
-                        <div
-                          className="h-16 w-16 rounded-3xl border border-white/10"
-                          style={{ background: c.hex }}
-                        />
-                        <div
-                          className="absolute -inset-4 rounded-[28px] opacity-30 blur-2xl"
-                          style={{ background: c.hex }}
-                          aria-hidden
-                        />
-                      </div>
-
-                      <div className="min-w-0">
-                        <div className="text-[16px] font-semibold text-white/90 truncate">{c.name}</div>
-                        <div className="mt-1 text-[12px] text-white/55 font-mono">{c.hex}</div>
-                        <div className="mt-2 text-[12px] leading-5 text-white/60">
-                          {i === 0
-                            ? "Base forte: ti fa sembrare subito più ordinato."
-                            : "Usalo nei capi principali per un look coerente."}
-                        </div>
-                      </div>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="flex items-center justify-center gap-2 pb-4">
-              {palette.map((_, i) => (
-                <div
-                  key={i}
-                  className={
-                    i === activeIdx
-                      ? "h-[7px] w-[7px] rounded-full bg-white/70 border border-white/20"
-                      : "h-[7px] w-[7px] rounded-full bg-white/10 border border-white/15"
-                  }
-                />
-              ))}
-            </div>
+        <div className="mt-4 space-y-1">
+          <div className="text-[16px] font-medium tracking-tight text-white/90">
+            {c.name}
           </div>
+
+          <div className="text-[12px] text-white/55 font-mono">
+            {c.hex?.toUpperCase()}
+          </div>
+
+          <div className="mt-3 text-[12px] text-white/55 leading-snug">
+            {i === 0 ? "Colore base. Costruisce il tuo look." : "Usalo per capi chiave e layering."}
+          </div>
+        </div>
+      </div>
+    ))}
+  </div>
+
+  <p className="text-[13px] text-white/50 leading-6">
+    Scegli un colore della palette e mantienilo nei capi principali. Il risultato sarà sempre coerente.
+  </p>
+</div>
 
           {/* vibe box */}
           <div className="mt-3 rounded-2xl border border-white/10 bg-white/[0.02] p-4">
