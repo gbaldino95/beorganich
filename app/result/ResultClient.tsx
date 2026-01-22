@@ -151,10 +151,7 @@ function buildVibeText(styleName?: string) {
 export default function ResultClient() {
   // ✅ metti qui il link shop (provvisorio ok)
   const SHOP_URL = "https://beorganich.vercel.app/shop";
-
-  const [data, setData] = useState<ResultData | null>(null);
-  const [toast, setToast] = useState<string | null>(null);
-// ✅ Mobile conversion: sticky shop dopo palette
+  // ===== Mobile conversion: palette → shop =====
 const [paletteSeen, setPaletteSeen] = useState(false);
 const paletteSentinelRef = useRef<HTMLDivElement | null>(null);
 
@@ -170,6 +167,9 @@ useEffect(() => {
   obs.observe(el);
   return () => obs.disconnect();
 }, []);
+
+  const [data, setData] = useState<ResultData | null>(null);
+  const [toast, setToast] = useState<string | null>(null)
 
   // email gate
   const [email, setEmail] = useState("");
@@ -194,9 +194,7 @@ const [selectedColor, setSelectedColor] = useState<PaletteColor | null>(null);
   "lastResult",
   "lastPalette",
 ];
-// ✅ sticky shop only after palette (mobile)
-const [paletteSeen, setPaletteSeen] = useState(false);
-const paletteSentinelRef = useRef<HTMLDivElement | null>(null);
+
     // fallback demo
     const fallback: ResultData = {
       styleName: "SAGE STUDIO",
@@ -869,7 +867,7 @@ function roundRect(
     })}
   </div>
 
-  <div ref={paletteSentinelRef} className="h-1 w-full" />
+
 </div>
 
           {/* vibe box */}
@@ -1100,54 +1098,39 @@ function roundRect(
         </div>
       )}
 
-      {/* ✅ STICKY SHOP (mobile) — appare solo dopo palette */}
+      {/* ✅ STICKY SHOP (mobile) — appare SOLO dopo palette */}
 {paletteSeen && (
   <div className="fixed bottom-0 left-0 right-0 z-50 lg:hidden pointer-events-none px-4 pb-[calc(env(safe-area-inset-bottom)+14px)] pt-3 bg-gradient-to-t from-black/90 to-transparent">
     <div className="mx-auto max-w-3xl pointer-events-auto">
       <Link
-        href="/shop"
-        className="
-          relative overflow-hidden
-          flex h-14 w-full items-center justify-between gap-3
-          rounded-2xl bg-white px-5
-          text-black
-          active:scale-[0.99] transition
-          shadow-[0_14px_44px_rgba(255,255,255,0.18)]
-        "
-        style={{
-          animation: "uny-slide-up 260ms cubic-bezier(0.2,0.8,0.2,1) both",
-        }}
-      >
-        {/* sheen premium */}
-        <span
-          aria-hidden
-          className="pointer-events-none absolute inset-0"
-          style={{
-            background:
-              "linear-gradient(115deg, transparent 0%, rgba(255,255,255,0.0) 35%, rgba(255,255,255,0.55) 50%, rgba(255,255,255,0.0) 65%, transparent 100%)",
-            animation: "uny-sheen 2200ms ease-in-out 200ms infinite",
-          }}
-        />
+  href="/shop"
+  className="
+    uny-anim-in relative overflow-hidden
+    flex h-14 w-full items-center justify-between gap-3
+    rounded-2xl bg-white px-5
+    text-black
+    active:scale-[0.99] transition
+    shadow-[0_14px_44px_rgba(255,255,255,0.18)]
+  "
+>
+  <span className="flex flex-col leading-tight">
+    <span className="text-[12px] font-semibold tracking-[0.18em] uppercase opacity-70">
+      Shop
+    </span>
+    <span className="text-[14px] font-semibold">
+      Capi già coerenti con la tua palette
+    </span>
+  </span>
 
-        <span className="flex flex-col leading-tight">
-          <span className="text-[12px] font-semibold tracking-[0.18em] uppercase opacity-70">
-            Shop matchati
-          </span>
-          <span className="text-[14px] font-semibold">
-            Capi coerenti con la tua palette
-          </span>
-        </span>
+  <span className="shrink-0 rounded-full bg-black px-3 py-2 text-[13px] font-semibold text-white">
+    Vai ai match →
+  </span>
 
-        <span
-          className="shrink-0 rounded-full bg-black px-3 py-2 text-[13px] font-semibold text-white"
-          style={{ animation: "uny-cta-breath 1600ms ease-in-out 600ms infinite" }}
-        >
-          Vai ai match →
-        </span>
-      </Link>
+  <span aria-hidden className="uny-sheen pointer-events-none absolute inset-0" />
+</Link>
 
       <div className="mt-2 text-center text-[12px] text-white/55">
-        3 match pronti. Apri e scegli in 10 secondi.
+        Selezionati per comprare senza ripensamenti.
       </div>
     </div>
   </div>
