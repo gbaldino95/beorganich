@@ -184,6 +184,7 @@ useEffect(() => {
   const [paletteOpen, setPaletteOpen] = useState(false);
 const [activeGroup, setActiveGroup] = useState<PaletteGroupKey>("core");
 const [selectedColor, setSelectedColor] = useState<PaletteColor | null>(null);
+
   useEffect(() => {
     const fromStorage = readLastResultFromStorage();
     const KEYS = [
@@ -193,7 +194,9 @@ const [selectedColor, setSelectedColor] = useState<PaletteColor | null>(null);
   "lastResult",
   "lastPalette",
 ];
-
+// ✅ sticky shop only after palette (mobile)
+const [paletteSeen, setPaletteSeen] = useState(false);
+const paletteSentinelRef = useRef<HTMLDivElement | null>(null);
     // fallback demo
     const fallback: ResultData = {
       styleName: "SAGE STUDIO",
@@ -757,38 +760,23 @@ function roundRect(
             </div>
 
             <div className="flex items-center gap-2">
-              <button
-                onClick={onSavePaletteToGallery}
-                className="relative z-10 inline-flex items-center justify-center gap-2 rounded-full border border-white/15 bg-white/[0.03] px-4 py-2 text-[13px] text-white/90 hover:bg-white/[0.08] hover:border-white/25 transition active:scale-[0.98]"
-              >
-                Salva
-                <span className="inline-block h-[6px] w-[6px] rounded-full bg-white/60" />
-              </button>
+  <button
+    onClick={onSavePaletteToGallery}
+    className="relative z-10 inline-flex items-center justify-center gap-2 rounded-full border border-white/15 bg-white/[0.03] px-4 py-2 text-[13px] text-white/90 hover:bg-white/[0.08] hover:border-white/25 transition active:scale-[0.98]"
+  >
+    Salva
+    <span className="inline-block h-[6px] w-[6px] rounded-full bg-white/60" />
+  </button>
 
-              <button
-                onClick={onSharePalette}
-                className="relative z-10 inline-flex items-center justify-center gap-2 rounded-full bg-white px-4 py-2 text-[13px] font-semibold text-black hover:bg-white/90 transition active:scale-[0.98] shadow-[0_10px_34px_rgba(255,255,255,0.12)]"
-              >
-                Condividi ✨
-              </button>
-            </div>
-          </div>
-          <div className="mt-4 rounded-2xl border border-white/10 bg-white/[0.02] p-4">
-  <div className="flex items-center justify-between gap-3">
-    <div>
-      <div className="text-[12px] tracking-[0.22em] text-white/45 uppercase">Next step</div>
-      <div className="mt-1 text-[13px] text-white/80 font-medium">
-        Vuoi i capi già coerenti con la tua palette?
-      </div>
-    </div>
-    <Link
-      href="/shop"
-      className="rounded-full bg-white px-4 py-2 text-[13px] font-semibold text-black hover:bg-white/90 transition active:scale-[0.98]"
-    >
-      Vai allo shop →
-    </Link>
-  </div>
+  <Link
+    href="/shop"
+    className="relative z-10 inline-flex items-center justify-center rounded-full bg-white px-4 py-2 text-[13px] font-semibold text-black hover:bg-white/90 transition active:scale-[0.98] shadow-[0_10px_34px_rgba(255,255,255,0.12)]"
+  >
+    Vedi capi matchati →
+  </Link>
 </div>
+          </div>
+          
           {/* PALETTE GRID — 48 / 4 GROUPS */}
 <div className="mt-6">
   {/* header tabs */}
@@ -881,9 +869,7 @@ function roundRect(
     })}
   </div>
 
-  <div className="mt-3 text-[12px] text-white/40">
-    Tip pro: CORE 60–70% · SOFT 15–25% · DEEP 10–20% · ACCENT 5–10%.
-  </div>
+  <div ref={paletteSentinelRef} className="h-1 w-full" />
 </div>
 
           {/* vibe box */}
@@ -1114,36 +1100,54 @@ function roundRect(
         </div>
       )}
 
-      {/* ✅ STICKY SHOP (mobile) — appare SOLO dopo palette */}
+      {/* ✅ STICKY SHOP (mobile) — appare solo dopo palette */}
 {paletteSeen && (
   <div className="fixed bottom-0 left-0 right-0 z-50 lg:hidden pointer-events-none px-4 pb-[calc(env(safe-area-inset-bottom)+14px)] pt-3 bg-gradient-to-t from-black/90 to-transparent">
     <div className="mx-auto max-w-3xl pointer-events-auto">
       <Link
         href="/shop"
         className="
+          relative overflow-hidden
           flex h-14 w-full items-center justify-between gap-3
           rounded-2xl bg-white px-5
-          text-black text-[15px] font-semibold
+          text-black
           active:scale-[0.99] transition
           shadow-[0_14px_44px_rgba(255,255,255,0.18)]
         "
+        style={{
+          animation: "uny-slide-up 260ms cubic-bezier(0.2,0.8,0.2,1) both",
+        }}
       >
+        {/* sheen premium */}
+        <span
+          aria-hidden
+          className="pointer-events-none absolute inset-0"
+          style={{
+            background:
+              "linear-gradient(115deg, transparent 0%, rgba(255,255,255,0.0) 35%, rgba(255,255,255,0.55) 50%, rgba(255,255,255,0.0) 65%, transparent 100%)",
+            animation: "uny-sheen 2200ms ease-in-out 200ms infinite",
+          }}
+        />
+
         <span className="flex flex-col leading-tight">
           <span className="text-[12px] font-semibold tracking-[0.18em] uppercase opacity-70">
             Shop matchati
           </span>
-          <span className="text-[14px]">
-            Vai allo shop (selezionati per te)
+          <span className="text-[14px] font-semibold">
+            Capi coerenti con la tua palette
           </span>
         </span>
 
-        <span className="shrink-0 rounded-full bg-black px-3 py-2 text-[13px] font-semibold text-white">
-          Apri →
+        <span
+          className="shrink-0 rounded-full bg-black px-3 py-2 text-[13px] font-semibold text-white"
+          style={{ animation: "uny-cta-breath 1600ms ease-in-out 600ms infinite" }}
+        >
+          Vai ai match →
         </span>
       </Link>
 
-      <div className="mt-2 text-center text-[12px] text-white/60">
-        Prima palette · poi acquisto rapido
+      <div className="mt-2 text-center text-[12px] text-white/55">
+        3 match pronti. Apri e scegli in 10 secondi.
       </div>
     </div>
   </div>
