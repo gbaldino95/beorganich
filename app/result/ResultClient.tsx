@@ -154,6 +154,22 @@ export default function ResultClient() {
 
   const [data, setData] = useState<ResultData | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+// ✅ Mobile conversion: sticky shop dopo palette
+const [paletteSeen, setPaletteSeen] = useState(false);
+const paletteSentinelRef = useRef<HTMLDivElement | null>(null);
+
+useEffect(() => {
+  const el = paletteSentinelRef.current;
+  if (!el) return;
+
+  const obs = new IntersectionObserver(
+    ([entry]) => setPaletteSeen(entry.isIntersecting),
+    { threshold: 0.25 }
+  );
+
+  obs.observe(el);
+  return () => obs.disconnect();
+}, []);
 
   // email gate
   const [email, setEmail] = useState("");
@@ -245,6 +261,10 @@ const activeColors = useMemo<PaletteColor[]>(() => {
 const visibleColors = useMemo<PaletteColor[]>(() => {
   return has48 ? activeColors : palette;
 }, [has48, activeColors, palette]);
+// ✅ group coerente anche quando NON hai 48
+const groupForDescription = useMemo<PaletteGroupKey>(() => {
+  return has48 ? activeGroup : "core";
+}, [has48, activeGroup]);
 function describeColor(hex: string, group: PaletteGroupKey): ColorDescriptor {
   // base descriptor “sempre vero”
   const lum = luminance01(hex);
@@ -259,13 +279,21 @@ function describeColor(hex: string, group: PaletteGroupKey): ColorDescriptor {
     isNeutral ? "lana merino · cotton heavy · twill" : "knit fine · popeline · satin opaco";
 
   const base: ColorDescriptor = {
-    time: isDark ? "ALL DAY" : "DAY",
-    role: "BASE",
-    usage: isNeutral
-      ? "Base di lusso: la usi spesso, resta sempre ‘clean’."
-      : "Base raffinata: valorizza il viso senza risultare ‘colorata’.",
-    pieces: `T-shirt · camicia · pantalone · cappotto (${material})`,
-  };
+  time: isDark ? "ALL DAY" : "DAY",
+  role: "BASE",
+  usage: isNeutral
+    ? "Fondazione del look: sembra subito ordinato e costoso."
+    : temp === "cool"
+    ? "Pulito e moderno: dà precisione al viso senza urlare."
+    : temp === "warm"
+    ? "Caldo e raffinato: rende il look più ricco e curato."
+    : "Equilibrato: ti fa sembrare “in ordine” in 2 secondi.",
+  pieces: isDark
+    ? `Blazer · cappotto · pantalone tailored (${material})`
+    : isLight
+    ? `Maglia · camicia · layer leggero (${material})`
+    : `T-shirt · camicia · pantalone (${material})`,
+};
 
   if (group === "soft") {
     return {
@@ -713,7 +741,8 @@ function roundRect(
     Tip: salva la palette e usala come “uniform” quando compri.
   </div>
 </section>
-
+{/* sentinel: quando entri in palette, abilita sticky shop */}
+<div ref={paletteSentinelRef} className="h-px w-full" />
         {/* PALETTE */}
         <section
           id="palette-export"
@@ -744,6 +773,22 @@ function roundRect(
               </button>
             </div>
           </div>
+          <div className="mt-4 rounded-2xl border border-white/10 bg-white/[0.02] p-4">
+  <div className="flex items-center justify-between gap-3">
+    <div>
+      <div className="text-[12px] tracking-[0.22em] text-white/45 uppercase">Next step</div>
+      <div className="mt-1 text-[13px] text-white/80 font-medium">
+        Vuoi i capi già coerenti con la tua palette?
+      </div>
+    </div>
+    <Link
+      href="/shop"
+      className="rounded-full bg-white px-4 py-2 text-[13px] font-semibold text-black hover:bg-white/90 transition active:scale-[0.98]"
+    >
+      Vai allo shop →
+    </Link>
+  </div>
+</div>
           {/* PALETTE GRID — 48 / 4 GROUPS */}
 <div className="mt-6">
   {/* header tabs */}
@@ -784,15 +829,8 @@ function roundRect(
   {/* grid */}
   <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
     {visibleColors.map((c) => {
-      const d = describeColor(c.hex, activeGroup);
-const usageText = has48
-  ? d.usage
-  : "Colore chiave della tua palette. Funziona sempre su di te.";
-
-const piecesText = has48
-  ? d.pieces
-  : "Maglia · camicia · pantalone · capospalla pulito";
-      return (
+  const d = describeColor(c.hex, groupForDescription);
+  return (
         <button
           key={`${activeGroup}-${c.name}-${c.hex}`}
           type="button"
@@ -835,8 +873,8 @@ const piecesText = has48
             </div>
 
             {/* ✅ DICITURE PREMIUM sotto HEX */}
-            <div className="mt-2 text-[12px] leading-5 text-white/70">{usageText}</div>
-<div className="mt-2 text-[12px] leading-5 text-white/45">{piecesText}</div>
+            <div className="mt-2 text-[12px] leading-5 text-white/70">{d.usage}</div>
+<div className="mt-2 text-[12px] leading-5 text-white/45">{d.pieces}</div>
           </div>
         </button>
       );
@@ -1003,10 +1041,10 @@ const piecesText = has48
         <div className="text-[16px] font-semibold text-white/90 truncate">{selectedColor.name}</div>
         <div className="mt-1 text-[12px] text-white/55 font-mono">{selectedColor.hex.toUpperCase()}</div>
         <div className="mt-2 text-[12px] text-white/65 leading-5">
-          {describeColor(selectedColor.hex, activeGroup).usage}
+          {describeColor(selectedColor.hex, groupForDescription).usage}
         </div>
         <div className="mt-1 text-[12px] text-white/45 leading-5">
-          {describeColor(selectedColor.hex, activeGroup).pieces}
+          {describeColor(selectedColor.hex, groupForDescription).pieces}
         </div>
       </div>
     </div>
@@ -1028,7 +1066,7 @@ const piecesText = has48
 
   {/* ✅ DICITURE PREMIUM sotto HEX */}
   {(() => {
-  const d = describeColor(c.hex, activeGroup);
+  const d = describeColor(c.hex, groupForDescription);
   return (
     <>
       <div className="mt-2 text-[12px] leading-5 text-white/70">{d.usage}</div>
@@ -1076,18 +1114,40 @@ const piecesText = has48
         </div>
       )}
 
-      {/* STICKY CTA mobile = UNICO SHOP CTA */}
-      <div className="fixed bottom-0 left-0 right-0 z-50 lg:hidden pointer-events-none px-4 pb-[calc(env(safe-area-inset-bottom)+14px)] pt-3 bg-gradient-to-t from-black/90 to-transparent">
-        <div className="mx-auto max-w-3xl pointer-events-auto">
-          <Link
-            href="/shop"
-            className="flex h-14 w-full items-center justify-center rounded-2xl bg-white text-black text-[15px] font-semibold active:scale-[0.99] transition shadow-[0_12px_36px_rgba(255,255,255,0.18)]"
-          >
-            Vai allo shop →
-          </Link>
-          <div className="mt-2 text-center text-[12px] text-white/60">Palette pronta · Match già selezionati</div>
-        </div>
+      {/* ✅ STICKY SHOP (mobile) — appare SOLO dopo palette */}
+{paletteSeen && (
+  <div className="fixed bottom-0 left-0 right-0 z-50 lg:hidden pointer-events-none px-4 pb-[calc(env(safe-area-inset-bottom)+14px)] pt-3 bg-gradient-to-t from-black/90 to-transparent">
+    <div className="mx-auto max-w-3xl pointer-events-auto">
+      <Link
+        href="/shop"
+        className="
+          flex h-14 w-full items-center justify-between gap-3
+          rounded-2xl bg-white px-5
+          text-black text-[15px] font-semibold
+          active:scale-[0.99] transition
+          shadow-[0_14px_44px_rgba(255,255,255,0.18)]
+        "
+      >
+        <span className="flex flex-col leading-tight">
+          <span className="text-[12px] font-semibold tracking-[0.18em] uppercase opacity-70">
+            Shop matchati
+          </span>
+          <span className="text-[14px]">
+            Vai allo shop (selezionati per te)
+          </span>
+        </span>
+
+        <span className="shrink-0 rounded-full bg-black px-3 py-2 text-[13px] font-semibold text-white">
+          Apri →
+        </span>
+      </Link>
+
+      <div className="mt-2 text-center text-[12px] text-white/60">
+        Prima palette · poi acquisto rapido
       </div>
+    </div>
+  </div>
+)}
     </div>
   );
 }
