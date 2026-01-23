@@ -750,6 +750,7 @@ function roundRect(
         >
           <div className="flex items-start justify-between gap-3">
 
+
             <div className="flex items-center gap-2">
   <button
     onClick={onSavePaletteToGallery}
@@ -768,43 +769,6 @@ function roundRect(
 </div>
           </div>
           
-          {/* PALETTE GRID — 48 / 4 GROUPS */}
-<div className="mt-6">
-  {/* header tabs */}
-  <div className="flex items-center justify-between gap-3">
-    <div>
-      <div className="text-[12px] tracking-[0.22em] text-white/45 uppercase">
-        Palette system
-      </div>
-
-      <div className="mt-1 text-[12px] text-white/55">
-        {has48
-          ? groupSub[activeGroup]
-          : "Questi sono i colori che ti valorizzano di più. Usali come riferimento fisso."}
-      </div>
-    </div>
-
-    {has48 && (
-      <div className="flex items-center gap-1 rounded-full border border-white/10 bg-white/[0.02] p-1">
-        {(Object.keys(groupLabel) as PaletteGroupKey[]).map((k) => (
-          <button
-            key={k}
-            type="button"
-            onClick={() => setActiveGroup(k)}
-            className={[
-              "h-9 rounded-full px-3 sm:px-4 text-[11px] sm:text-[12px] tracking-[0.16em] uppercase transition",
-              k === activeGroup
-                ? "bg-white text-black shadow-[0_14px_40px_rgba(255,255,255,0.12)]"
-                : "text-white/65 hover:text-white hover:bg-white/[0.06]",
-            ].join(" ")}
-          >
-            {groupLabel[k]}
-          </button>
-        ))}
-      </div>
-    )}
-  </div>
-
   {/* PALETTE GRID — 48 / 4 GROUPS */}
 <div className="mt-6">
   {/* header tabs */}
@@ -911,7 +875,7 @@ function roundRect(
   {/* ✅ SENTINEL: ATTIVA LO STICKY SHOP SOLO DOPO LA PALETTE */}
   <div ref={paletteSentinelRef} className="h-px w-full" />
 </div>
-</div>
+
 
           <div className="mt-4 text-center">
             <Link
