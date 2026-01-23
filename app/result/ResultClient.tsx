@@ -742,8 +742,7 @@ function roundRect(
     Tip: salva la palette e usala come “uniform” quando compri.
   </div>
 </section>
-{/* sentinel: quando entri in palette, abilita sticky shop */}
-<div ref={paletteSentinelRef} className="h-px w-full" />
+
         {/* PALETTE */}
         <section
           id="palette-export"
@@ -812,11 +811,49 @@ function roundRect(
     )}
   </div>
 
-  {/* grid */}
+  {/* PALETTE GRID — 48 / 4 GROUPS */}
+<div className="mt-6">
+  {/* header tabs */}
+  <div className="flex items-center justify-between gap-3">
+    <div>
+      <div className="text-[12px] tracking-[0.22em] text-white/45 uppercase">
+        Palette system
+      </div>
+
+      <div className="mt-1 text-[12px] text-white/55">
+        {has48
+          ? groupSub[activeGroup]
+          : "Questi sono i colori che ti valorizzano di più. Usali come riferimento fisso."}
+      </div>
+    </div>
+
+    {has48 && (
+      <div className="flex items-center gap-1 rounded-full border border-white/10 bg-white/[0.02] p-1">
+        {(Object.keys(groupLabel) as PaletteGroupKey[]).map((k) => (
+          <button
+            key={k}
+            type="button"
+            onClick={() => setActiveGroup(k)}
+            className={[
+              "h-9 rounded-full px-3 sm:px-4 text-[11px] sm:text-[12px] tracking-[0.16em] uppercase transition",
+              k === activeGroup
+                ? "bg-white text-black shadow-[0_14px_40px_rgba(255,255,255,0.12)]"
+                : "text-white/65 hover:text-white hover:bg-white/[0.06]",
+            ].join(" ")}
+          >
+            {groupLabel[k]}
+          </button>
+        ))}
+      </div>
+    )}
+  </div>
+
+  {/* GRID COLORI */}
   <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
     {visibleColors.map((c) => {
-  const d = describeColor(c.hex, groupForDescription);
-  return (
+      const d = describeColor(c.hex, groupForDescription);
+
+      return (
         <button
           key={`${activeGroup}-${c.name}-${c.hex}`}
           type="button"
@@ -849,50 +886,37 @@ function roundRect(
             </div>
 
             <div className="mt-1 flex items-center justify-between gap-2">
-              <div className="text-[12px] text-white/55 font-mono">{c.hex.toUpperCase()}</div>
+              <div className="text-[12px] text-white/55 font-mono">
+                {c.hex.toUpperCase()}
+              </div>
 
               <div className="flex items-center gap-1">
-                <span className="text-[10px] tracking-[0.18em] uppercase text-white/45">{d.time}</span>
+                <span className="text-[10px] tracking-[0.18em] uppercase text-white/45">
+                  {d.time}
+                </span>
                 <span className="text-white/25">•</span>
-                <span className="text-[10px] tracking-[0.18em] uppercase text-white/45">{d.role}</span>
+                <span className="text-[10px] tracking-[0.18em] uppercase text-white/45">
+                  {d.role}
+                </span>
               </div>
             </div>
 
-            {/* ✅ DICITURE PREMIUM sotto HEX */}
-            <div className="mt-2 text-[12px] leading-5 text-white/70">{d.usage}</div>
-<div className="mt-2 text-[12px] leading-5 text-white/45">{d.pieces}</div>
+            {/* DICITURE PREMIUM */}
+            <div className="mt-2 text-[12px] leading-5 text-white/70">
+              {d.usage}
+            </div>
+            <div className="mt-2 text-[12px] leading-5 text-white/45">
+              {d.pieces}
+            </div>
           </div>
         </button>
       );
     })}
   </div>
 
-
+  {/* ✅ SENTINEL: ATTIVA LO STICKY SHOP SOLO DOPO LA PALETTE */}
+  <div ref={paletteSentinelRef} className="h-px w-full" />
 </div>
-
-          {/* vibe box */}
-          <div className="mt-3 rounded-2xl border border-white/10 bg-white/[0.02] p-4">
-  <div className="flex items-start justify-between gap-3">
-    <div>
-      <div className="text-[12px] tracking-[0.22em] text-white/45 uppercase">Share</div>
-      <div className="mt-1 text-[13px] text-white/80 font-medium">Caption pronta per TikTok</div>
-    </div>
-    <button
-      type="button"
-      onClick={onSharePalette}
-      className="rounded-full border border-white/12 bg-white/[0.03] px-3 py-2 text-[12px] text-white/75 hover:bg-white/[0.06] transition active:scale-[0.99]"
-    >
-      Copia
-    </button>
-  </div>
-
-  <div className="mt-3 whitespace-pre-line rounded-xl border border-white/10 bg-black/30 p-3 text-[12px] leading-6 text-white/55">
-    {vibeText}
-  </div>
-
-  <div className="mt-2 text-[12px] text-white/40">
-    Tip: screenshot palette → post → “che vibe ti dà?” → commenti = algoritmo.
-  </div>
 </div>
 
           <div className="mt-4 text-center">
