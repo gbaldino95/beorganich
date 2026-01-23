@@ -749,12 +749,6 @@ function roundRect(
           className="mt-5 rounded-3xl border border-white/10 bg-white/[0.03] p-5 sm:p-6 scroll-mt-24"
         >
           <div className="flex items-start justify-between gap-3">
-            <div>
-              <h2 className="text-[18px] font-semibold text-white/90">La tua palette</h2>
-              <p className="mt-1 text-[12px] text-white/55">
-                Se sei indeciso: scegli un colore qui dentro e vai sul sicuro.
-              </p>
-            </div>
 
             <div className="flex items-center gap-2">
   <button
